@@ -1,6 +1,6 @@
 # Strategy Backtester
 
-A modular systematic trading backtester with three independent strategies. All data is sourced exclusively from **Alpaca Markets** (SIP feed).
+A modular systematic trading backtester with two independent strategies. All data is sourced exclusively from **Alpaca Markets** (SIP feed).
 
 ---
 
@@ -23,15 +23,7 @@ The primary growth engine. Rotates between four US equity factor ETFs — QQQ (g
 
 Trades only 18% of days. Uses 5-minute SPY bars (Alpaca SIP) to identify high-conviction mornings where both the overnight gap and the first 30-minute session agree strongly in direction. On those days, **shorts the last 30 minutes of the session** — up mornings tend to reverse (61% win rate), down mornings tend to continue (62% win rate). Both point the same direction: short the afternoon.
 
-Low correlation to AFP (different timeframe, different mechanism) makes it an effective diversifier.
-
----
-
-### 3. Multi-Asset Trend Following — Daily trend strategy (reference)
-**File:** `strategies/multi_asset_trend/main.py`  
-**Sharpe:** 0.68 &nbsp;|&nbsp; **Period:** 2019–2024 &nbsp;(underperforms on extended 2016–2024 window)
-
-Applies inverse-volatility risk parity across seven liquid ETFs spanning equities, bonds, gold, commodities, and REITs. Uses a strict 3-of-4 composite momentum vote. Held as a reference implementation of classic multi-asset trend following.
+Low correlation to AFP (different timeframe, different mechanism) makes it an effective portfolio diversifier.
 
 ---
 
@@ -49,19 +41,13 @@ Applies inverse-volatility risk parity across seven liquid ETFs spanning equitie
 │   │   ├── backtest.py
 │   │   └── config.py
 │   │
-│   ├── spy_intraday_short/        ★ Secondary / hedging strategy
-│   │   ├── main.py
-│   │   ├── strategy.py
-│   │   ├── data_intraday.py
-│   │   ├── config.py
-│   │   ├── STRATEGY.md            Full documentation
-│   │   └── generate_pdf.py
-│   │
-│   └── multi_asset_trend/         Reference strategy
+│   └── spy_intraday_short/        ★ Secondary / hedging strategy
 │       ├── main.py
-│       ├── backtest.py
-│       ├── plot.py
-│       └── config.py
+│       ├── strategy.py
+│       ├── data_intraday.py
+│       ├── config.py
+│       ├── STRATEGY.md            Full documentation
+│       └── generate_pdf.py
 │
 ├── data_cache/            Cached Alpaca downloads (gitignored)
 ├── outputs/               Charts and CSVs (gitignored)
@@ -82,9 +68,6 @@ python -m strategies.equity_factor_rotation.main
 
 # Intraday hedging strategy (requires Alpaca credentials in .env)
 python -m strategies.spy_intraday_short.main
-
-# Daily trend reference strategy
-python -m strategies.multi_asset_trend.main
 
 # Generate PDF documentation for the intraday strategy
 python strategies/spy_intraday_short/generate_pdf.py
@@ -116,9 +99,9 @@ ALPACA_SECRET=your-secret-here
 
 | Data | Source | Notes |
 |---|---|---|
-| ETF daily prices | Alpaca SIP `1Day` bars | SPY, QQQ, QUAL, MTUM, USMV, EFA, TLT, IEF, GLD, DBC, VNQ |
+| ETF daily prices | Alpaca SIP `1Day` bars | SPY, QQQ, QUAL, MTUM, USMV |
 | SPY 5-min intraday | Alpaca SIP `5Min` bars | ~400k bars, 2016–2024 |
-| T-bill (risk-free rate) | BIL ETF daily return | SPDR Bloomberg 1-3 Month T-Bill — Alpaca SIP proxy for ^IRX |
+| T-bill (risk-free rate) | BIL ETF daily return | SPDR Bloomberg 1-3 Month T-Bill — proxy for ^IRX |
 
 No external dependencies beyond standard scientific Python.
 
@@ -129,7 +112,7 @@ No external dependencies beyond standard scientific Python.
 1. Create `strategies/your_strategy_name/` with `__init__.py`
 2. Add `config.py` importing shared params from root `config.py`
 3. Add `backtest.py` with your signal and simulation logic
-4. Add `main.py` with the sys.path setup (see existing strategies for pattern)
+4. Add `main.py` with the sys.path setup (see existing strategies for the pattern)
 5. Import from `core.data` and `core.metrics` for data and performance measurement
 
 ---
