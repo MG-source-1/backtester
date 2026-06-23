@@ -267,6 +267,31 @@ def run_factor_backtest(
     return df
 
 
+def get_factor_weights(
+    prices: pd.DataFrame,
+    lookback_months: list,
+    rank_tilt: float,
+    corr_window: int,
+    corr_high: float,
+    corr_mid: float,
+    target_vol: float,
+    max_weight: float,
+    max_leverage: float,
+    vol_lookback: int,
+) -> pd.DataFrame:
+    """
+    Return daily allocation weights (date × ticker) for use as a rotation signal.
+    Includes momentum filtering, rank tilt, and vol targeting, but not the
+    drawdown stop — the calling portfolio manages its own risk.
+    """
+    signals, rank_scale = _compute_signals_and_rank_tilt(prices, lookback_months, rank_tilt)
+    corr_scale = _correlation_regime_scale(prices, corr_window, corr_high, corr_mid)
+    return _compute_weights(
+        prices, signals, rank_scale, corr_scale,
+        target_vol, max_weight, max_leverage, vol_lookback,
+    )
+
+
 def per_factor_contribution(
     prices: pd.DataFrame,
     initial_capital: float,

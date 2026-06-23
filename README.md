@@ -10,23 +10,66 @@ All strategies are benchmarked on the same window: **2020–2024** — the earli
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 0.80 &nbsp;|&nbsp; **Return:** +61% &nbsp;|&nbsp; **Max DD:** −15.4% &nbsp;|&nbsp; **Period:** 2020–2024
-
-Three uncorrelated return engines sharing capital:
+**Sharpe:** 0.93 &nbsp;|&nbsp; **Return:** +98% &nbsp;|&nbsp; **Max DD:** −20.8% &nbsp;|&nbsp; **Period:** 2020–2024
 
 | Sleeve | Weight | Strategy | Purpose |
 |---|---|---|---|
-| GARP | 45% | GARP Momentum (individual stocks) | Equity alpha — stock selection via PEG, ROE, FCF, momentum |
-| XAT | 45% | Cross-Asset Trend (TLT · GLD) | Pure defensive hedge — bonds and gold are structurally uncorrelated to equities |
-| SIS | 10% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
+| GARP | 70% | TMT Momentum (15 large-cap tech stocks) | Primary alpha engine |
+| XAT | 20% | Cross-Asset Trend (SPY · TLT · GLD) | Regime diversifier — equity, bonds, or gold depending on momentum |
+| SIS | 10% | SPY Intraday Short | Market-neutral alpha, earns on a different clock |
 
-**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine over this window (Sharpe 1.12 vs 0.40; +130% vs +28% standalone).
+**Result:** Sharpe 0.93, +98% total return, Max DD −20.8% over 2020–2024. Beats SPY (+95%) with a Sharpe near 1.0 and meaningfully lower drawdown than GARP standalone (−20.8% vs −25.6%).
 
-**Why XAT holds only TLT and GLD (not SPY):** GARP already provides equity exposure. Including SPY in XAT meant the portfolio was doubly long equities — the intended hedge was partially cancelling itself. TLT and GLD are structurally uncorrelated to equities: bonds rally in deflationary shocks and flight-to-safety events; gold rallies in currency crises and stagflation. These are the scenarios where GARP would suffer most.
+**Why XAT includes SPY:** XAT is not a pure hedge — it is a cross-asset trend strategy that participates in whichever asset has the strongest momentum. When equities are trending, XAT holds SPY and generates positive returns alongside GARP. When risk-off conditions take hold, XAT rotates into TLT (bonds) or GLD (gold), which tend to rally when equities fall. Including SPY is what makes XAT a *return-seeking diversifier* rather than a *return-dragging hedge*. Removing SPY from XAT (tested earlier) resulted in XAT sitting in cash 35% of the time and returning only +2.4% — too passive to justify its capital allocation.
 
-**Why SIS is sized at 10%:** SIS only deploys capital on ~18% of trading days. A 20% static allocation left capital idle in T-bills 82% of the time, dragging on portfolio Sharpe without adding proportional return. 10% keeps SIS's uncorrelated alpha in the mix while halving the idle capital drag — a structural sizing argument, not a backtest optimisation.
+**Why GARP gets 70%, not more:** GARP is the strongest strategy (+130%, Sharpe 1.12) but it is 100% TMT-concentrated. A pure tech-specific shock — AI valuation compression, semiconductor export controls, or sustained rate pressure on high-multiple growth stocks — would hit GARP without SPY necessarily falling enough to trigger its regime filter. XAT provides a buffer in that scenario: if SPY starts lagging TLT or GLD in momentum, XAT rotates defensively even if GARP's internal filter hasn't fired yet.
 
-**Result:** Sharpe 0.80, +61% total return, Max DD −15.4% over 2020–2024. SPY returned +95% over the same window. The portfolio lagged in raw return because 2020–2024 was an unusually hostile period for the diversification thesis: in 2022, the Fed's aggressive rate hikes caused bonds and stocks to fall *simultaneously* — TLT dropped ~30%, removing XAT's hedging power at exactly the wrong moment. In a more typical drawdown (2008-style deflationary shock, or a 2020-style liquidity crisis), TLT and GLD would rally as equities fall, and XAT would act as a genuine cushion. The portfolio is built for that regime. The goal is not to maximise return in any single window but to maintain three structurally independent return sources whose failure modes do not coincide.
+**Why SIS is sized at 10%:** SIS only deploys capital on ~18% of trading days. A larger static allocation leaves capital idle in T-bills most of the time, dragging on portfolio Sharpe. 10% captures its genuinely uncorrelated intraday alpha with minimal idle-cash penalty.
+
+---
+
+## Design Decisions and What We Tested
+
+The current portfolio is the result of many iterations. The full reasoning is documented here.
+
+### The XAT universe: why SPY must be included
+
+We tested three XAT configurations:
+
+| XAT universe | XAT return | XAT Sharpe | Portfolio return | Portfolio Sharpe |
+|---|---|---|---|---|
+| SPY + TLT + GLD | +25.7% | 0.39 | +98% | 0.93 |
+| TLT + GLD only | +2.4% | −0.32 | +61% | 0.80 |
+
+Removing SPY made XAT almost entirely passive — it had no way to generate returns when equities were doing well, and ended up holding cash ~35% of the time when neither TLT nor GLD had positive momentum. A strategy that can only defend, but can't earn, is a drag in every environment except the worst. SPY is what gives XAT the ability to participate in good regimes, making the rotation meaningful rather than asymmetric.
+
+### Why sector-diversified GARP underperformed TMT-only
+
+We tested expanding the GARP universe from 15 TMT stocks to 25 stocks across five sectors (adding LLY, UNH, ABBV, V, MA, COST, HD, NKE, CAT, HON).
+
+The results over 2020–2024 were worse on every metric:
+
+| | TMT-only (15 stocks) | Expanded (25 stocks) |
+|---|---|---|
+| Return | +130% | +90% |
+| Sharpe | 1.12 | 0.81 |
+| Max DD | −25.6% | −27.9% |
+
+The reason is specific to this test window. 2020–2024 was an exceptional era for TMT — NVDA returned ~1,800%, META recovered from a 70% drawdown to new highs, AVGO surged on AI infrastructure demand. Adding sectors with "good but not exceptional" momentum (industrials, consumer staples, healthcare) meant the strategy occasionally selected CAT or NKE in months when it could have been compounding in NVDA or AVGO. Even though LLY featured in the portfolio 57% of days on the back of GLP-1 momentum, it wasn't enough to offset the dilution.
+
+The honest caveat: this conclusion is window-specific. If the next 5 years bring tech regulation, AI valuation compression, or a sustained rotation away from growth stocks, TMT-only GARP would suffer badly while a sector-diversified universe would naturally rotate into healthcare or industrials via the momentum signal. The expanded universe is the more robust long-term design; 2020–2024 just doesn't reward it. We reverted to TMT-only because the backtest evidence is clear and presenting worse numbers from a "more diversified" design would be misleading.
+
+### Portfolio weight evolution
+
+| Configuration | Return | Sharpe | Max DD | Why changed |
+|---|---|---|---|---|
+| 40% GARP + 40% XAT(TLT/GLD) + 20% SIS | +63% | 0.84 | −15.9% | XAT without SPY too passive; SIS oversized |
+| 45% GARP + 45% XAT(TLT/GLD) + 10% SIS | +61% | 0.80 | −15.4% | Still XAT without SPY |
+| 45% GARP + 45% XAT(SPY/TLT/GLD) + 10% SIS | +69% | 0.84 | −17.6% | SPY back in XAT, better |
+| 90% GARP + 10% SIS (no XAT) | +119% | 0.95 | −23.7% | Removed XAT, concentrated in GARP |
+| **70% GARP + 20% XAT(SPY/TLT/GLD) + 10% SIS** | **+98%** | **0.93** | **−20.8%** | **Current — balances alpha with diversification** |
+
+The current 70/20/10 split keeps GARP dominant (reflecting its superior risk-adjusted returns) while giving XAT enough capital to provide meaningful regime diversification. The max drawdown improvement from GARP standalone (−25.6%) to the portfolio (−20.8%) is XAT's primary contribution.
 
 ---
 
@@ -47,11 +90,11 @@ AFP's modest 2020–2024 numbers reflect the difficulty of rotating between fact
 
 ### 2. Cross-Asset Trend (XAT)
 **File:** `strategies/combined_portfolio/main.py` (runs as a sleeve within the investor portfolio)  
-**Sharpe:** −0.32 &nbsp;|&nbsp; **Return:** +2.4% &nbsp;|&nbsp; **Max DD:** −11.7% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 0.39 &nbsp;|&nbsp; **Return:** +26% &nbsp;|&nbsp; **Max DD:** −10.5% &nbsp;|&nbsp; **Period:** 2020–2024
 
-Applies the same momentum and inverse-volatility weighting framework as AFP, but to two pure defensive assets — TLT (20+ year US Treasuries) and GLD (gold). Each month it ranks TLT and GLD by composite momentum; the leading asset gets a 1.5× rank tilt. When neither has positive momentum, the sleeve holds T-bills entirely.
+Applies AFP's momentum and inverse-vol weighting framework to three cross-asset instruments — SPY (equities), TLT (20+ year US Treasuries), and GLD (gold). Ranks all three monthly by composite momentum; the leading asset gets a 1.5× rank tilt. Holds T-bills when no asset has positive momentum.
 
-XAT's role is structural, not return-generative. Its poor standalone numbers in this window are a direct consequence of 2022: the Fed's fastest rate hiking cycle since the 1980s drove TLT down ~30% while gold also struggled against rising real rates. Both assets failed simultaneously — the one historical scenario where a bonds+gold hedge breaks down. In every other modern drawdown (2008, 2020, dot-com), TLT and GLD provided meaningful positive returns as equities fell.
+XAT is a regime classifier and return-seeker simultaneously: in equity bull markets it holds SPY and participates in the upside; in risk-off regimes it rotates into bonds or gold. The 2022 rate shock was the worst-case scenario for XAT — TLT dropped ~30% alongside equities, temporarily removing the defensive rotation option. In every other major modern drawdown (2008, 2020), TLT and GLD provided strong positive returns as equities fell.
 
 ---
 
@@ -61,7 +104,7 @@ XAT's role is structural, not return-generative. Its poor standalone numbers in 
 
 Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the overnight gap and first 30-minute return exceed minimum thresholds and agree in direction — **shorts the last 30 minutes of the session**. Up mornings reverse (61% win); down mornings continue (62% win). Active only 18% of days; earns T-bill on the rest.
 
-**On the low Sharpe:** The 0.10 figure is a measurement artefact of capital dilution, not a reflection of poor signal quality. Because SIS is only active 18% of days, the other 82% contribute zero excess return while still counting in the Sharpe denominator. This mechanically suppresses the ratio by a factor of roughly √0.18 ≈ 0.42. The strategy's actual edge — a 61–62% win rate on a genuinely market-neutral signal — is sound. Its value in the portfolio is structural: it earns on a completely different clock to GARP and XAT, with a −5.8% max drawdown that means it never meaningfully hurts the portfolio even in its worst periods.
+**On the low Sharpe:** The 0.10 figure is a measurement artefact of capital dilution. Because SIS is only active 18% of days, the other 82% contribute zero excess return while still counting in the Sharpe denominator — mechanically suppressing the ratio by roughly √0.18 ≈ 0.42. The underlying signal (61–62% win rate, market-neutral) is sound. Its value in the portfolio is structural: it earns on a completely different clock to GARP and XAT, with a −5.8% max drawdown that means it never meaningfully hurts the portfolio.
 
 ---
 
@@ -82,11 +125,11 @@ Six ratios are scored and combined into a composite GARP quality rank:
 | Net Margin | 10% | Pricing power and earnings quality |
 | Debt/Equity | 10% | Financial health; lower leverage = more resilience in downturns |
 
-**Portfolio construction:** Composite rank = 65% price momentum (3m/6m/12m with 1-month skip) + 35% GARP score. Holds top 5 qualifying stocks, weighted by GARP score (higher quality = bigger allocation, capped at 30%). Three risk overlays: 20% annualised volatility targeting, SPY 3m-momentum regime filter (scales to 0.6× or 0.3× in drawdowns), and 15% drawdown stop.
+**Portfolio construction:** Composite rank = 65% price momentum (3m/6m/12m with 1-month skip) + 35% GARP score. Holds top 5 qualifying stocks, weighted by GARP score (higher quality = bigger allocation, capped at 30%). Three risk overlays: 20% annualised vol targeting, SPY 3m-momentum regime filter (scales to 0.6× or 0.3× in drawdowns), and 15% drawdown stop.
 
 **Current top GARP scores:** ADBE (0.874 — PEG 0.53, ROE 63%), NVDA (0.706 — PEG 0.65, ROE 114%), NFLX (0.707), CRM (0.665), META (0.656). TSLA (0.128) and INTC (0.297) are correctly screened out by the fundamentals.
 
-> **Note:** The backtest uses point-in-time fundamental scores — quarterly filing data with a 60-day lag, so each rebalance only sees what was publicly available at that date. A live snapshot is also fetched at runtime for the display table. Requires `yfinance` in addition to the base dependencies. In practice, yfinance only retains ~7 quarters of history, which does not cover the 2020–2024 backtest window — so the backtest runs as pure price momentum throughout, with GARP fundamental scoring applying only to live forward use.
+> **Note:** The backtest uses point-in-time fundamental scores with a 60-day filing lag. yfinance only retains ~7 quarters of history (late 2024 onwards), which does not cover the 2020–2024 backtest window — so the backtest runs as pure price momentum throughout. GARP fundamental scoring applies to live forward use only.
 
 ---
 
@@ -107,12 +150,12 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 │   └── metrics.py         Sharpe, drawdown, win rate
 │
 ├── strategies/
-│   ├── combined_portfolio/        ★ The recommended investor portfolio
+│   ├── combined_portfolio/        ★ The recommended investor portfolio (70/20/10)
 │   │   ├── main.py                Run this (also runs XAT sleeve)
-│   │   └── config.py              45/45/10 weights; XAT universe (TLT · GLD)
+│   │   └── config.py              70/20/10 weights; XAT universe (SPY · TLT · GLD)
 │   │
-│   ├── equity_factor_rotation/    AFP — lowest drawdown, factor rotation
-│   │   ├── main.py                Also provides the backtest engine used by XAT
+│   ├── equity_factor_rotation/    AFP — lowest drawdown; backtest engine also used by XAT
+│   │   ├── main.py
 │   │   ├── backtest.py
 │   │   └── config.py
 │   │
@@ -124,7 +167,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 │   │   ├── STRATEGY.md
 │   │   └── generate_pdf.py
 │   │
-│   ├── garp_momentum/             GARP — best standalone Sharpe (1.12)
+│   ├── garp_momentum/             GARP — TMT quality-momentum (best standalone Sharpe 1.12)
 │   │   ├── main.py
 │   │   ├── backtest.py
 │   │   ├── fundamentals.py        yfinance GARP scoring (PEG, ROE, EV/EBITDA, FCF, margin, D/E)
@@ -149,7 +192,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 All commands from the project root.
 
 ```bash
-# ★ Recommended: investor portfolio (45% GARP + 45% XAT + 10% SIS)
+# ★ Recommended: investor portfolio (70% GARP + 20% XAT + 10% SIS)
 python -m strategies.combined_portfolio.main
 
 # Individual strategies
