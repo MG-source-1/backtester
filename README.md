@@ -24,7 +24,9 @@ Three uncorrelated return engines sharing capital:
 
 **Why SIS is sized at 10%:** SIS only deploys capital on ~18% of trading days. A 20% static allocation left capital idle in T-bills 82% of the time, dragging on portfolio Sharpe without adding proportional return. 10% keeps SIS's uncorrelated alpha in the mix while halving the idle capital drag — a structural sizing argument, not a backtest optimisation.
 
-**Result:** Sharpe 0.84, +69% total return, Max DD −18% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT being a drag during the 2022 rate hike cycle (bonds fell alongside stocks, an historically unusual event). The benefit shows in drawdown: −18% vs GARP standalone's −26%.
+**Result:** Sharpe 0.84, +69% total return, Max DD −18% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT (bonds + gold) being a drag during the 2022 rate hike cycle. The benefit shows in drawdown: −18% vs GARP standalone's −26%.
+
+**Honest assessment:** GARP standalone actually has both higher return (+130%) and higher Sharpe (1.12) than the mixed portfolio over this window — which raises a fair question about whether diversification adds value here. The answer depends on what you believe about the future. The 2020–2024 window was specifically hostile to the portfolio's diversification thesis: in 2022, the Fed's aggressive rate hikes caused bonds and stocks to fall *simultaneously*, which is historically unusual. TLT dropped ~30% that year, removing XAT's hedging power at exactly the wrong moment. In a more typical drawdown (2008-style, or a 2020-style liquidity shock), bonds rally as stocks fall and XAT acts as a genuine cushion. The portfolio is built for that regime. The goal is not to maximise return in any single window but to maintain three structurally independent return sources — equity momentum (GARP), cross-asset trend (XAT), and intraday mean-reversion (SIS) — whose failure modes do not coincide.
 
 ---
 
@@ -39,6 +41,8 @@ Rotates monthly between four US equity factor ETFs — QQQ (growth/tech), QUAL (
 - **Factor Leadership Tilt:** top-ranked qualifying factor gets 1.5× weight
 - **Correlation Regime Filter:** when QQQ and USMV start moving together (correlation >0.75), a systemic event is underway — exposure cuts to 40%. Detected both the 2020 crash and 2022 rate shock without VIX data.
 
+AFP's modest 2020–2024 numbers reflect the difficulty of rotating between factor ETFs that became highly correlated during this period. Its structural strength is capital preservation: lowest max drawdown of any strategy at −13.6%.
+
 ---
 
 ### 2. SPY Intraday Afternoon Short
@@ -46,6 +50,8 @@ Rotates monthly between four US equity factor ETFs — QQQ (growth/tech), QUAL (
 **Sharpe:** 0.10 &nbsp;|&nbsp; **Return:** +14% &nbsp;|&nbsp; **Max DD:** −5.8% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the overnight gap and first 30-minute return exceed minimum thresholds and agree in direction — **shorts the last 30 minutes of the session**. Up mornings reverse (61% win); down mornings continue (62% win). Active only 18% of days; earns T-bill on the rest.
+
+**On the low Sharpe:** The 0.10 figure is a measurement artefact of capital dilution, not a reflection of poor signal quality. Because SIS is only active 18% of days, the other 82% contribute zero excess return while still counting in the Sharpe denominator. This mechanically suppresses the ratio by a factor of roughly √0.18 ≈ 0.42 versus a strategy that trades every day with equivalent signal. The strategy's actual edge — a 61–62% win rate on a genuinely market-neutral signal — is sound. Its value in the portfolio is structural: it earns on a completely different clock to GARP and XAT, and its −5.8% max drawdown means it never meaningfully hurts the portfolio even in its worst periods.
 
 ---
 
@@ -70,7 +76,7 @@ Six ratios are scored and combined into a composite GARP quality rank:
 
 **Current top GARP scores:** ADBE (0.874 — PEG 0.53, ROE 63%), NVDA (0.706 — PEG 0.65, ROE 114%), NFLX (0.707), CRM (0.665), META (0.656). TSLA (0.128) and INTC (0.297) are correctly screened out by the fundamentals.
 
-> **Note:** The backtest uses point-in-time fundamental scores — quarterly filing data with a 60-day lag, so each rebalance only sees what was publicly available at that date. A live snapshot is also fetched at runtime for the display table. Requires `yfinance` in addition to the base dependencies. yfinance typically provides ~4–5 years of quarterly history, so point-in-time scores apply from roughly 2020 onwards; earlier periods receive neutral scores and are driven purely by momentum.
+> **Note:** The backtest uses point-in-time fundamental scores — quarterly filing data with a 60-day lag, so each rebalance only sees what was publicly available at that date. A live snapshot is also fetched at runtime for the display table. Requires `yfinance` in addition to the base dependencies. In practice, yfinance only retains ~7 quarters of history, which does not cover the 2020–2024 backtest window — so the backtest runs as pure price momentum throughout, with GARP fundamental scoring applying only to live forward use.
 
 ---
 
@@ -93,9 +99,9 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 ├── strategies/
 │   ├── combined_portfolio/        ★ The recommended investor portfolio
 │   │   ├── main.py                Run this
-│   │   └── config.py              40/40/20 weights
+│   │   └── config.py              45/45/10 weights
 │   │
-│   ├── equity_factor_rotation/    AFP — low drawdown, factor rotation
+│   ├── equity_factor_rotation/    AFP — lowest drawdown, factor rotation
 │   │   ├── main.py
 │   │   ├── backtest.py
 │   │   └── config.py
@@ -133,7 +139,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 All commands from the project root.
 
 ```bash
-# ★ Recommended: investor portfolio (40% GARP + 40% cross-asset + 20% intraday)
+# ★ Recommended: investor portfolio (45% GARP + 45% cross-asset + 10% intraday)
 python -m strategies.combined_portfolio.main
 
 # Individual strategies
