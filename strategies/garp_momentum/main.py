@@ -26,7 +26,7 @@ import matplotlib.dates as mdates
 
 from core.data import fetch_prices, fetch_tbill, fetch_spy
 from core.metrics import compute_metrics
-from strategies.garp_momentum.fundamentals import fetch_garp_scores, METRIC_WEIGHTS
+from strategies.garp_momentum.fundamentals import fetch_garp_scores, build_garp_history, METRIC_WEIGHTS
 from strategies.garp_momentum.backtest import run_garp_backtest
 from strategies.garp_momentum.config import (
     TICKERS, START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR,
@@ -117,12 +117,15 @@ def main():
     print("[data] Fetching SPY benchmark …")
     spy_cumulative = fetch_spy(START_DATE, END_DATE, INITIAL_CAPITAL)
 
-    print("[fundamentals] Fetching GARP scores from yfinance …")
+    print("[fundamentals] Building point-in-time GARP score history …")
+    garp_history = build_garp_history(available, prices, cache_dir=DATA_CACHE_DIR)
+
+    print("[fundamentals] Fetching current GARP scores for display …")
     garp_df = fetch_garp_scores(available)
 
     # ── Print GARP table ──────────────────────────────────────
     sorted_garp = garp_df.sort_values("garp_score", ascending=False)
-    print("\nGARP Fundamental Scores  (current snapshot — static quality screen)")
+    print("\nGARP Fundamental Scores  (current snapshot — display only, backtest uses point-in-time)")
     print("─" * 74)
     print(f"  {'Ticker':<6}  {'PEG':>5}  {'ROE':>7}  {'EV/EBITDA':>9}  "
           f"{'FCF%':>6}  {'Margin':>7}  {'D/E':>6}  {'Score':>7}")
@@ -148,7 +151,7 @@ def main():
     print("[backtest] Running …")
     portfolio = run_garp_backtest(
         prices         = prices,
-        garp_scores    = garp_df["garp_score"],
+        garp_scores    = garp_history,
         spy_prices     = spy_prices,
         tbill_daily_rate = tbill_rate,
         initial_capital  = INITIAL_CAPITAL,

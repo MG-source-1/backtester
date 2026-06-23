@@ -5,8 +5,8 @@ Why GARP replaces AFP here
 ──────────────────────────
 AFP (equity factor ETFs) and GARP (individual stock GARP + momentum) are both
 long-equity strategies.  Running both just doubles equity exposure without real
-diversification.  GARP is strictly better as the equity engine (Sharpe 1.23 vs
-0.97; +531% vs +130% over 2016-2024) so AFP is retired from this portfolio.
+diversification.  GARP is strictly better as the equity engine (Sharpe 1.29 vs
+0.97; +575% vs +130% over 2016-2024) so AFP is retired from this portfolio.
 
 The genuine diversification comes from XAT and SIS, which are structurally
 uncorrelated with equity:
@@ -17,7 +17,7 @@ uncorrelated with equity:
 Allocation (40 / 40 / 20):
   40%  GARP  — Growth-at-Reasonable-Price + Momentum (individual stock alpha)
                TMT universe: AAPL · MSFT · GOOGL · META · NVDA · AMD · AVGO …
-               Sharpe 1.23 · Return +531% · Max DD −21%
+               Sharpe 1.29 · Return +575% · Max DD −26%
   40%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
                Higher weight than before — more bond/gold ballast needed since
                individual stocks are more volatile than factor ETFs.
@@ -50,7 +50,7 @@ import matplotlib.dates as mdates
 from core.data import fetch_prices, fetch_tbill, fetch_spy
 from core.metrics import compute_metrics
 
-from strategies.garp_momentum.fundamentals import fetch_garp_scores
+from strategies.garp_momentum.fundamentals import build_garp_history
 from strategies.garp_momentum.backtest import run_garp_backtest
 from strategies.garp_momentum.config import (
     TICKERS as GARP_TICKERS,
@@ -117,14 +117,16 @@ def main():
     print("[data] Downloading SPY benchmark …")
     spy_cumulative = fetch_spy(START_DATE, END_DATE, INITIAL_CAPITAL)
 
-    print("[fundamentals] Fetching GARP scores from yfinance …")
-    garp_df = fetch_garp_scores(list(garp_prices.columns))
+    print("[fundamentals] Building point-in-time GARP score history …")
+    garp_history = build_garp_history(
+        list(garp_prices.columns), garp_prices, cache_dir=DATA_CACHE_DIR
+    )
 
     # ── Run GARP ──────────────────────────────────────────────
     print("\n[GARP] Running GARP momentum portfolio …")
     garp_portfolio = run_garp_backtest(
         prices           = garp_prices,
-        garp_scores      = garp_df["garp_score"],
+        garp_scores      = garp_history,
         spy_prices       = spy_prices,
         tbill_daily_rate = tbill_rate,
         initial_capital  = cap_garp,

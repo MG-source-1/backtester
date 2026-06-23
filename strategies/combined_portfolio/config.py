@@ -3,7 +3,11 @@ Investor Portfolio — capital allocation config.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from config import START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
+from config import END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
+
+# Restricted to 2020 so all three sleeves (GARP, XAT, SIS) have full data.
+# SIS intraday data starts 2020 — running earlier leaves that sleeve in cash.
+START_DATE = "2020-01-01"
 
 # ── Allocation weights ────────────────────────────────────────
 WEIGHT_GARP = 0.40   # GARP Momentum              (individual stock alpha, Sharpe 1.23)

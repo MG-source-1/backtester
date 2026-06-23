@@ -94,7 +94,7 @@ def _spy_regime_scale(spy_prices: pd.Series, date: pd.Timestamp) -> float:
 
 def _compute_monthly_weights(
     prices: pd.DataFrame,
-    garp_scores: pd.Series,
+    garp_scores,          # pd.Series (static) or pd.DataFrame (date × ticker, point-in-time)
     spy_prices: pd.Series,
     top_n: int,
     lookback_months: list,
@@ -107,14 +107,21 @@ def _compute_monthly_weights(
     Returns:
       weights       — dict {rebal_date: pd.Series of target weights}
       regime_scales — dict {rebal_date: float exposure scale}
-    """
-    rebal_dates = _month_end_dates(prices.index)
-    warmup      = max(lookback_months) + skip_months  # months of history needed
 
-    # Cross-sectional GARP rank (stable — precompute once)
-    g      = garp_scores.reindex(prices.columns).fillna(0.30)
-    g_min, g_max = g.min(), g.max()
-    garp_rank = (g - g_min) / max(g_max - g_min, 1e-9)
+    garp_scores can be:
+      pd.Series  — static scores applied across the whole backtest
+      pd.DataFrame — date-indexed point-in-time scores; at each rebalance date
+                     the most recent available row is used (forward-filled).
+    """
+    rebal_dates   = _month_end_dates(prices.index)
+    warmup        = max(lookback_months) + skip_months
+    time_varying  = isinstance(garp_scores, pd.DataFrame)
+
+    # Precompute rank for the static case
+    if not time_varying:
+        g         = garp_scores.reindex(prices.columns).fillna(0.30)
+        g_min, g_max = g.min(), g.max()
+        _static_rank = (g - g_min) / max(g_max - g_min, 1e-9)
 
     weights       = {}
     regime_scales = {}
@@ -125,6 +132,26 @@ def _compute_monthly_weights(
         if i < warmup:
             weights[date] = pd.Series(0.0, index=prices.columns)
             continue
+
+        # GARP rank and effective weights for this rebalance date
+        if time_varying:
+            prior     = garp_scores.loc[:date]
+            has_data  = not prior.empty and not prior.iloc[-1].isna().all()
+            if has_data:
+                g_now    = prior.iloc[-1].reindex(prices.columns).fillna(0.30)
+                g_min, g_max = g_now.min(), g_now.max()
+                garp_rank = (g_now - g_min) / max(g_max - g_min, 1e-9)
+                garp_eff  = garp_weight
+                mom_eff   = mom_weight
+            else:
+                # No filing data yet — pure momentum, equal-weight holdings
+                garp_rank = pd.Series(0.0, index=prices.columns)
+                garp_eff  = 0.0
+                mom_eff   = 1.0
+        else:
+            garp_rank = _static_rank
+            garp_eff  = garp_weight
+            mom_eff   = mom_weight
 
         mom = _momentum_scores(prices, date, lookback_months, skip_months)
 
@@ -139,8 +166,8 @@ def _compute_monthly_weights(
 
         # Composite score (higher = stronger GARP + stronger momentum)
         composite = (
-            mom_weight  * mom_rank.reindex(prices.columns).fillna(0) +
-            garp_weight * garp_rank
+            mom_eff   * mom_rank.reindex(prices.columns).fillna(0) +
+            garp_eff  * garp_rank
         )
 
         # Absolute filter: remove stocks with non-positive raw momentum
@@ -152,12 +179,16 @@ def _compute_monthly_weights(
             weights[date] = pd.Series(0.0, index=prices.columns)
             continue
 
-        # Allocate within selected stocks proportionally to GARP quality
-        sel_garp = garp_rank.reindex(candidates.index)
-        g_sum    = sel_garp.sum()
-        raw_w    = sel_garp / g_sum if g_sum > 1e-9 else pd.Series(
-            1.0 / len(candidates), index=candidates.index
-        )
+        # Allocate within selected stocks: GARP-quality-weighted when data
+        # exists, equal-weighted otherwise
+        if garp_eff > 0:
+            sel_garp = garp_rank.reindex(candidates.index)
+            g_sum    = sel_garp.sum()
+            raw_w    = sel_garp / g_sum if g_sum > 1e-9 else pd.Series(
+                1.0 / len(candidates), index=candidates.index
+            )
+        else:
+            raw_w = pd.Series(1.0 / len(candidates), index=candidates.index)
 
         # Cap and renormalise
         raw_w = raw_w.clip(upper=max_weight)

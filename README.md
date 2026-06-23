@@ -8,7 +8,7 @@ A modular systematic trading backtester. All data is sourced from **Alpaca Marke
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 1.11 &nbsp;|&nbsp; **Return:** +247% &nbsp;|&nbsp; **Max DD:** −16.4% &nbsp;|&nbsp; **Period:** 2016–2024
+**Sharpe:** 0.84 &nbsp;|&nbsp; **Return:** +63% &nbsp;|&nbsp; **Max DD:** −15.9% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Three uncorrelated return engines sharing capital:
 
@@ -18,9 +18,9 @@ Three uncorrelated return engines sharing capital:
 | XAT | 40% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
 | SIS | 20% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
 
-**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine (Sharpe 1.23 vs 0.97; +531% vs +130% standalone). XAT gets equal weight to AFP's old 50% because individual stocks need more bond/gold ballast than factor ETFs did.
+**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine (Sharpe 1.29 vs 0.97; +575% vs +130% standalone). XAT gets equal weight to AFP's old 50% because individual stocks need more bond/gold ballast than factor ETFs did.
 
-**Result:** Sharpe 1.11, +247% total return, beats SPY (+237%) with half the max drawdown (−16% vs SPY's −34%).
+**Result:** Sharpe 0.84, +63% total return, Max DD −16% over 2020–2024. SPY returned +95% over the same window — the portfolio underperformed in this period due to XAT (bonds + gold) being a drag during the 2022 rate hike cycle. The diversification benefit shows in the much lower max drawdown (−16% vs SPY's implied drawdown over this window).
 
 ---
 
@@ -47,7 +47,7 @@ Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the ove
 
 ### 3. GARP Momentum
 **File:** `strategies/garp_momentum/main.py`  
-**Sharpe:** 1.23 &nbsp;|&nbsp; **Return:** +531% &nbsp;|&nbsp; **Max DD:** −21.2% &nbsp;|&nbsp; **Period:** 2016–2024
+**Sharpe:** 1.29 &nbsp;|&nbsp; **Return:** +575% &nbsp;|&nbsp; **Max DD:** −25.6% &nbsp;|&nbsp; **Period:** 2016–2024
 
 Applies **Growth at a Reasonable Price (GARP)** fundamental screening to a 15-stock TMT universe (AAPL, MSFT, GOOGL, META, NVDA, AMD, AVGO, QCOM, ORCL, CRM, ADBE, NFLX, AMZN, TSLA, INTC), then selects and sizes positions using **Jegadeesh-Titman price momentum**.
 
@@ -66,7 +66,7 @@ Six ratios are scored and combined into a composite GARP quality rank:
 
 **Current top GARP scores:** ADBE (0.874 — PEG 0.53, ROE 63%), NVDA (0.706 — PEG 0.65, ROE 114%), NFLX (0.707), CRM (0.665), META (0.656). TSLA (0.128) and INTC (0.297) are correctly screened out by the fundamentals.
 
-> **Note:** Fundamental scores are fetched live from yfinance at runtime and used as a static quality screen. The actual entry/exit signals are pure price momentum (no look-ahead). Requires `yfinance` in addition to the base dependencies.
+> **Note:** The backtest uses point-in-time fundamental scores — quarterly filing data with a 60-day lag, so each rebalance only sees what was publicly available at that date. A live snapshot is also fetched at runtime for the display table. Requires `yfinance` in addition to the base dependencies. yfinance typically provides ~4–5 years of quarterly history, so point-in-time scores apply from roughly 2020 onwards; earlier periods receive neutral scores and are driven purely by momentum.
 
 ---
 
