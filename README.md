@@ -10,19 +10,21 @@ All strategies are benchmarked on the same window: **2020–2024** — the earli
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 0.84 &nbsp;|&nbsp; **Return:** +63% &nbsp;|&nbsp; **Max DD:** −15.9% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 0.84 &nbsp;|&nbsp; **Return:** +69% &nbsp;|&nbsp; **Max DD:** −17.6% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Three uncorrelated return engines sharing capital:
 
 | Sleeve | Weight | Strategy | Purpose |
 |---|---|---|---|
-| GARP | 40% | GARP Momentum (individual stocks) | Equity alpha — individual stock selection via PEG, ROE, FCF, momentum |
-| XAT | 40% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
-| SIS | 20% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
+| GARP | 45% | GARP Momentum (individual stocks) | Equity alpha — individual stock selection via PEG, ROE, FCF, momentum |
+| XAT | 45% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
+| SIS | 10% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
 
 **Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine over this window (Sharpe 1.12 vs 0.40; +130% vs +28% standalone). XAT gets equal weight because individual stocks need more bond/gold ballast than factor ETFs did.
 
-**Result:** Sharpe 0.84, +63% total return, Max DD −16% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT being a drag during the 2022 rate hike cycle (bonds fell alongside stocks, an historically unusual event). The benefit shows in drawdown: −16% vs GARP standalone's −26%.
+**Why SIS is sized at 10%:** SIS only deploys capital on ~18% of trading days. A 20% static allocation left capital idle in T-bills 82% of the time, dragging on portfolio Sharpe without adding proportional return. 10% keeps SIS's uncorrelated alpha in the mix while halving the idle capital drag — a structural sizing argument, not a backtest optimisation.
+
+**Result:** Sharpe 0.84, +69% total return, Max DD −18% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT being a drag during the 2022 rate hike cycle (bonds fell alongside stocks, an historically unusual event). The benefit shows in drawdown: −18% vs GARP standalone's −26%.
 
 ---
 

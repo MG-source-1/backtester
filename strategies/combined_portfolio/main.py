@@ -14,16 +14,17 @@ uncorrelated with equity:
     fall in crises, acting as a natural hedge.
   • SIS is intraday and market-neutral — it earns on a different clock entirely.
 
-Allocation (40 / 40 / 20):
-  40%  GARP  — Growth-at-Reasonable-Price + Momentum (individual stock alpha)
+Allocation (45 / 45 / 10):
+  45%  GARP  — Growth-at-Reasonable-Price + Momentum (individual stock alpha)
                TMT universe: AAPL · MSFT · GOOGL · META · NVDA · AMD · AVGO …
-               Sharpe 1.29 · Return +575% · Max DD −26%
-  40%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
-               Higher weight than before — more bond/gold ballast needed since
-               individual stocks are more volatile than factor ETFs.
+               Sharpe 1.12 · Return +130% · Max DD −26%  (2020–2024)
+  45%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
+               Equal weight to GARP — individual stocks need more bond/gold
+               ballast than factor ETFs.
                Genuine drawdown protection in rate shocks and risk-off episodes.
-  20%  SIS   — SPY Intraday Afternoon Short (market-neutral alpha)
-               Earns on a different clock; partially negative equity correlation.
+  10%  SIS   — SPY Intraday Afternoon Short (market-neutral alpha)
+               Sized at 10% because SIS only deploys ~18% of days — a 20%
+               static slice left capital idle in T-bills 82% of the time.
 
 Run from project root:
     python -m strategies.combined_portfolio.main
