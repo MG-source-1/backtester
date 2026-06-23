@@ -5,7 +5,8 @@
       "Bash(grep -v \"NumPy\\\\|compiled\\\\|downgrade\\\\|pybind\\\\|expect\\\\|Traceback\\\\|from pandas\\\\|  File \\\\\"/\\\\|^import\\\\|AttributeError\\\\|^$\\\\|modules must\")",
       "Bash(grep -v \"NumPy\\\\|compiled\\\\|downgrade\\\\|pybind\\\\|expect\\\\|Traceback\\\\|from pandas\\\\|  File \\\\\"/\\\\|^import\\\\|AttributeError\\\\|^$\\\\|modules must\\\\|If you are\\\\|easiest solution\")",
       "Bash(grep -v \"NumPy\\\\|compiled\\\\|downgrade\\\\|pybind\\\\|expect\\\\|  File \\\\\"/\\\\|AttributeError\\\\|modules must\\\\|If you are\\\\|easiest solution\\\\|^$\")",
-      "Bash(grep -v \"NumPy\\\\|compiled\\\\|downgrade\\\\|pybind\\\\|expect\\\\|  File \\\\\"/\\\\|AttributeError\\\\|modules must\\\\|If you are\\\\|easiest solution\\\\|^$\\\\|ChainedAssign\")"
+      "Bash(grep -v \"NumPy\\\\|compiled\\\\|downgrade\\\\|pybind\\\\|expect\\\\|  File \\\\\"/\\\\|AttributeError\\\\|modules must\\\\|If you are\\\\|easiest solution\\\\|^$\\\\|ChainedAssign\")",
+      "Bash(pip install *)"
     ]
   }
 }

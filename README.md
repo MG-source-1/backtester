@@ -1,6 +1,6 @@
 # Strategy Backtester
 
-atA modular systematic trading backtester. All data is sourced exclusively from **Alpaca Markets** (SIP feed) — no Yahoo Finance.
+A modular systematic trading backtester. All data is sourced exclusively from **Alpaca Markets** (SIP feed)
 
 ---
 
@@ -8,17 +8,19 @@ atA modular systematic trading backtester. All data is sourced exclusively from 
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 0.87 &nbsp;|&nbsp; **Return:** +92% &nbsp;|&nbsp; **Max DD:** −10.7% &nbsp;|&nbsp; **Period:** 2016–2024
+**Sharpe:** 1.11 &nbsp;|&nbsp; **Return:** +247% &nbsp;|&nbsp; **Max DD:** −16.4% &nbsp;|&nbsp; **Period:** 2016–2024
 
-Three strategies sharing capital, each with a different return driver and low mutual correlation:
+Three uncorrelated return engines sharing capital:
 
 | Sleeve | Weight | Strategy | Purpose |
 |---|---|---|---|
-| AFP | 50% | Adaptive Factor Portfolio | Equity alpha via factor rotation |
-| XAT | 30% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in crises |
+| GARP | 40% | GARP Momentum (individual stocks) | Equity alpha — individual stock selection via PEG, ROE, FCF, momentum |
+| XAT | 40% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
 | SIS | 20% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
 
-**Why this beats chasing raw returns:** Sharpe 0.87 with 6.6% volatility means 1.8× leverage gives ~13.5% annualised return with only ~12% vol and ~−19% max DD — better risk-adjusted than SPY buy-and-hold at any return target.
+**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine (Sharpe 1.23 vs 0.97; +531% vs +130% standalone). XAT gets equal weight to AFP's old 50% because individual stocks need more bond/gold ballast than factor ETFs did.
+
+**Result:** Sharpe 1.11, +247% total return, beats SPY (+237%) with half the max drawdown (−16% vs SPY's −34%).
 
 ---
 
@@ -43,7 +45,32 @@ Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the ove
 
 ---
 
-### 3. Tech-Tier Momentum Ladder (reference)
+### 3. GARP Momentum
+**File:** `strategies/garp_momentum/main.py`  
+**Sharpe:** 1.23 &nbsp;|&nbsp; **Return:** +531% &nbsp;|&nbsp; **Max DD:** −21.2% &nbsp;|&nbsp; **Period:** 2016–2024
+
+Applies **Growth at a Reasonable Price (GARP)** fundamental screening to a 15-stock TMT universe (AAPL, MSFT, GOOGL, META, NVDA, AMD, AVGO, QCOM, ORCL, CRM, ADBE, NFLX, AMZN, TSLA, INTC), then selects and sizes positions using **Jegadeesh-Titman price momentum**.
+
+Six ratios are scored and combined into a composite GARP quality rank:
+
+| Ratio | Weight | Signal |
+|---|---|---|
+| PEG ratio | 30% | P/E ÷ EPS growth — core GARP metric; <1 = paying less than 1× per % of growth |
+| Return on Equity | 20% | Profitability quality; great companies sustain ROE >30% |
+| EV/EBITDA | 15% | Enterprise value efficiency; lower = cheaper relative to earnings power |
+| FCF Yield | 15% | Free cash flow / market cap — cash generation strength |
+| Net Margin | 10% | Pricing power and earnings quality |
+| Debt/Equity | 10% | Financial health; lower leverage = more resilience in downturns |
+
+**Portfolio construction:** Composite rank = 65% price momentum (3m/6m/12m with 1-month skip) + 35% GARP score. Holds top 5 qualifying stocks, weighted by GARP score (higher quality = bigger allocation, capped at 30%). Three risk overlays: 20% annualised volatility targeting, SPY 3m-momentum regime filter (scales to 0.6× or 0.3× in drawdowns), and 15% drawdown stop.
+
+**Current top GARP scores:** ADBE (0.874 — PEG 0.53, ROE 63%), NVDA (0.706 — PEG 0.65, ROE 114%), NFLX (0.707), CRM (0.665), META (0.656). TSLA (0.128) and INTC (0.297) are correctly screened out by the fundamentals.
+
+> **Note:** Fundamental scores are fetched live from yfinance at runtime and used as a static quality screen. The actual entry/exit signals are pure price momentum (no look-ahead). Requires `yfinance` in addition to the base dependencies.
+
+---
+
+### 4. Tech-Tier Momentum Ladder (reference)
 **File:** `strategies/concentrated_momentum/main.py`  
 **Return:** +305% &nbsp;|&nbsp; **Sharpe:** 0.54 &nbsp;|&nbsp; **Max DD:** −34.3% &nbsp;|&nbsp; **Period:** 2016–2024
 
@@ -77,6 +104,12 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Be
 │   │   ├── STRATEGY.md
 │   │   └── generate_pdf.py
 │   │
+│   ├── garp_momentum/             GARP + momentum — best standalone Sharpe (1.23)
+│   │   ├── main.py
+│   │   ├── backtest.py
+│   │   ├── fundamentals.py        yfinance GARP scoring (PEG, ROE, EV/EBITDA, FCF, margin, D/E)
+│   │   └── config.py
+│   │
 │   └── concentrated_momentum/     Reference — high return, high risk
 │       ├── main.py
 │       ├── backtest.py
@@ -103,6 +136,7 @@ python -m strategies.combined_portfolio.main
 python -m strategies.equity_factor_rotation.main
 python -m strategies.spy_intraday_short.main
 python -m strategies.concentrated_momentum.main
+python -m strategies.garp_momentum.main
 
 # Generate PDF documentation for the intraday strategy
 python strategies/spy_intraday_short/generate_pdf.py
@@ -114,7 +148,7 @@ python strategies/spy_intraday_short/generate_pdf.py
 
 **Install dependencies:**
 ```bash
-pip install pandas numpy matplotlib markdown
+pip install pandas numpy matplotlib markdown yfinance
 ```
 
 **Alpaca credentials** (required for all strategies):
@@ -134,9 +168,10 @@ ALPACA_SECRET=your-secret-here
 
 | Data | Source | Notes |
 |---|---|---|
-| ETF daily prices | Alpaca SIP `1Day` bars, `adjustment=all` | Total return (dividends included) |
+| ETF / stock daily prices | Alpaca SIP `1Day` bars, `adjustment=all` | Total return (splits + dividends included) |
 | SPY 5-min intraday | Alpaca SIP `5Min` bars | ~400k bars, 2016–2024 |
 | T-bill proxy | BIL ETF daily return | SPDR 1-3 Month T-Bill ETF |
+| Fundamental data | yfinance (live snapshot) | PEG, ROE, EV/EBITDA, FCF yield — GARP strategy only |
 
 ---
 

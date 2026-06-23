@@ -1,30 +1,32 @@
 """
-Investor Portfolio — designed for real-world allocability, not backtest maximisation.
+Investor Portfolio — three uncorrelated return engines sharing capital.
 
-Why this beats the 75/20/5 Tech-Momentum portfolio:
-  • Sharpe > 1 target — a high-Sharpe portfolio can be levered to any
-    return target with LESS risk than chasing raw returns directly.
-  • Genuine cross-asset diversification — TLT and GLD don't crash when
-    semiconductors crash.  The tech-momentum portfolio had three equity-
-    correlated strategies; this one has an equity sleeve, a cross-asset
-    sleeve, and a market-neutral sleeve.
-  • No regime-specific bets — the 75% SOXX allocation was a bet that the
-    AI semiconductor bull would continue.  This portfolio is designed to
-    work across multiple market regimes.
-  • Drawdown < 20% target — in practice, investors exit at -30%.  A
-    strategy that limits drawdowns is one investors actually stay in.
+Why GARP replaces AFP here
+──────────────────────────
+AFP (equity factor ETFs) and GARP (individual stock GARP + momentum) are both
+long-equity strategies.  Running both just doubles equity exposure without real
+diversification.  GARP is strictly better as the equity engine (Sharpe 1.23 vs
+0.97; +531% vs +130% over 2016-2024) so AFP is retired from this portfolio.
 
-Allocation (50 / 30 / 20):
-  50%  AFP   — Adaptive Factor Portfolio (equity factors, Sharpe 0.97)
-               QQQ · QUAL · MTUM · USMV with correlation regime filter
-  30%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
-               Same AFP engine, different universe, no correlation filter.
-               TLT and GLD provide genuine drawdown protection.
+The genuine diversification comes from XAT and SIS, which are structurally
+uncorrelated with equity:
+  • XAT holds TLT (bonds) and GLD (gold) alongside SPY — these go up when stocks
+    fall in crises, acting as a natural hedge.
+  • SIS is intraday and market-neutral — it earns on a different clock entirely.
+
+Allocation (40 / 40 / 20):
+  40%  GARP  — Growth-at-Reasonable-Price + Momentum (individual stock alpha)
+               TMT universe: AAPL · MSFT · GOOGL · META · NVDA · AMD · AVGO …
+               Sharpe 1.23 · Return +531% · Max DD −21%
+  40%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
+               Higher weight than before — more bond/gold ballast needed since
+               individual stocks are more volatile than factor ETFs.
+               Genuine drawdown protection in rate shocks and risk-off episodes.
   20%  SIS   — SPY Intraday Afternoon Short (market-neutral alpha)
-               Earns on a different clock, partially negative equity correlation.
+               Earns on a different clock; partially negative equity correlation.
 
 Run from project root:
-    python -m strategies.combined_portfolio.investor_main
+    python -m strategies.combined_portfolio.main
 """
 
 import os, sys
@@ -43,19 +45,29 @@ sys.path[:] = [p for p in sys.path if p and p not in ('.', '')]
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import matplotlib.dates as mdates
 
 from core.data import fetch_prices, fetch_tbill, fetch_spy
 from core.metrics import compute_metrics
 
+from strategies.garp_momentum.fundamentals import fetch_garp_scores
+from strategies.garp_momentum.backtest import run_garp_backtest
+from strategies.garp_momentum.config import (
+    TICKERS as GARP_TICKERS,
+    TOP_N, MAX_WEIGHT as GARP_MAX_WEIGHT,
+    MOM_WEIGHT, GARP_WEIGHT as GARP_SCORE_WEIGHT,
+    LOOKBACK_MONTHS, SKIP_MONTHS,
+    TARGET_VOL, MAX_LEVERAGE, VOL_LOOKBACK,
+    DRAWDOWN_STOP, TRANSACTION_COST,
+)
+
 from strategies.equity_factor_rotation.backtest import run_factor_backtest
 from strategies.equity_factor_rotation.config import (
-    TICKERS as AFP_TICKERS,
-    LOOKBACK_MONTHS, RANK_TILT,
+    LOOKBACK_MONTHS as AFP_LB, RANK_TILT,
     CORR_WINDOW, CORR_HIGH, CORR_MID,
-    TARGET_VOL, MAX_WEIGHT, MAX_LEVERAGE, VOL_LOOKBACK,
-    TRANSACTION_COST, DRAWDOWN_STOP,
+    TARGET_VOL as AFP_VOL, MAX_WEIGHT as AFP_MAX_W,
+    MAX_LEVERAGE as AFP_LEV, VOL_LOOKBACK as AFP_VOLLB,
+    TRANSACTION_COST as AFP_TC, DRAWDOWN_STOP as AFP_DD,
 )
 
 from strategies.spy_intraday_short.data_intraday import fetch_bars as fetch_intraday
@@ -67,45 +79,34 @@ from strategies.spy_intraday_short.config import (
 
 from strategies.combined_portfolio.config import (
     START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR,
+    WEIGHT_GARP, WEIGHT_XAT, WEIGHT_SIS,
+    XAT_TICKERS,
 )
-
-# ── Investor weights ──────────────────────────────────────────
-WEIGHT_AFP = 0.50   # Equity factors — best Sharpe in the toolkit
-WEIGHT_XAT = 0.30   # Cross-asset trend — genuine diversification
-WEIGHT_SIS = 0.20   # Intraday short — uncorrelated daily alpha
-
-# ── Cross-asset universe ──────────────────────────────────────
-# SPY: equities (risk-on), TLT: long bonds (deflation/risk-off),
-# GLD: gold (inflation/crisis hedge).  These three have near-zero
-# pairwise correlation in normal markets and negative correlation in crises.
-XAT_TICKERS = {
-    "SPY": "SPDR S&P 500 ETF",
-    "TLT": "iShares 20+ Year Treasury Bond",
-    "GLD": "SPDR Gold Shares",
-}
 
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    cap_afp = INITIAL_CAPITAL * WEIGHT_AFP
-    cap_xat = INITIAL_CAPITAL * WEIGHT_XAT
-    cap_sis = INITIAL_CAPITAL * WEIGHT_SIS
+    cap_garp = INITIAL_CAPITAL * WEIGHT_GARP
+    cap_xat  = INITIAL_CAPITAL * WEIGHT_XAT
+    cap_sis  = INITIAL_CAPITAL * WEIGHT_SIS
 
-    print(f"\n{'='*66}")
-    print("  INVESTOR PORTFOLIO  (50 / 30 / 20)")
-    print(f"{'='*66}")
+    print(f"\n{'='*68}")
+    print("  INVESTOR PORTFOLIO  (40 / 40 / 20)")
+    print(f"{'='*68}")
     print(f"  Period        : {START_DATE}  →  {END_DATE}")
     print(f"  Total capital : ${INITIAL_CAPITAL:,.0f}")
-    print(f"  AFP  50%  = ${cap_afp:,.0f}  Equity Factor Portfolio")
-    print(f"  XAT  30%  = ${cap_xat:,.0f}  Cross-Asset Trend (SPY·TLT·GLD)")
-    print(f"  SIS  20%  = ${cap_sis:,.0f}  SPY Intraday Short")
+    print(f"  GARP  40%  = ${cap_garp:,.0f}  GARP Momentum (individual stocks)")
+    print(f"  XAT   40%  = ${cap_xat:,.0f}  Cross-Asset Trend (SPY · TLT · GLD)")
+    print(f"  SIS   20%  = ${cap_sis:,.0f}  SPY Intraday Short")
     print(f"  Design goal   : Sharpe > 1.0  |  Max DD < 20%")
-    print(f"{'='*66}\n")
+    print(f"{'='*68}\n")
 
-    # ── Fetch data ────────────────────────────────────────────
-    print("[data] Downloading equity factor prices …")
-    afp_prices = fetch_prices(list(AFP_TICKERS.keys()), START_DATE, END_DATE)
+    # ── Fetch shared data ─────────────────────────────────────
+    print("[data] Downloading stock prices for GARP universe …")
+    garp_all_px = fetch_prices(GARP_TICKERS + ["SPY"], START_DATE, END_DATE)
+    spy_prices  = garp_all_px["SPY"] if "SPY" in garp_all_px.columns else None
+    garp_prices = garp_all_px[[t for t in GARP_TICKERS if t in garp_all_px.columns]]
 
     print("[data] Downloading cross-asset prices …")
     xat_prices = fetch_prices(list(XAT_TICKERS.keys()), START_DATE, END_DATE)
@@ -116,78 +117,92 @@ def main():
     print("[data] Downloading SPY benchmark …")
     spy_cumulative = fetch_spy(START_DATE, END_DATE, INITIAL_CAPITAL)
 
-    # ── Run AFP ───────────────────────────────────────────────
-    print("\n[AFP] Running equity factor portfolio …")
-    afp_portfolio = run_factor_backtest(
-        afp_prices, tbill_rate, cap_afp,
-        LOOKBACK_MONTHS, RANK_TILT,
-        CORR_WINDOW, CORR_HIGH, CORR_MID,
-        TARGET_VOL, MAX_WEIGHT, MAX_LEVERAGE, VOL_LOOKBACK,
-        TRANSACTION_COST, DRAWDOWN_STOP,
+    print("[fundamentals] Fetching GARP scores from yfinance …")
+    garp_df = fetch_garp_scores(list(garp_prices.columns))
+
+    # ── Run GARP ──────────────────────────────────────────────
+    print("\n[GARP] Running GARP momentum portfolio …")
+    garp_portfolio = run_garp_backtest(
+        prices           = garp_prices,
+        garp_scores      = garp_df["garp_score"],
+        spy_prices       = spy_prices,
+        tbill_daily_rate = tbill_rate,
+        initial_capital  = cap_garp,
+        top_n            = TOP_N,
+        lookback_months  = LOOKBACK_MONTHS,
+        skip_months      = SKIP_MONTHS,
+        garp_weight      = GARP_SCORE_WEIGHT,
+        mom_weight       = MOM_WEIGHT,
+        max_weight       = GARP_MAX_WEIGHT,
+        target_vol       = TARGET_VOL,
+        max_leverage     = MAX_LEVERAGE,
+        vol_lookback     = VOL_LOOKBACK,
+        transaction_cost = TRANSACTION_COST,
+        drawdown_stop_pct = DRAWDOWN_STOP,
     )
-    afp_ret = (afp_portfolio["portfolio_value"].iloc[-1] / cap_afp) - 1
-    print(f"  AFP total return: {afp_ret:+.1%}")
+    garp_ret = (garp_portfolio["portfolio_value"].iloc[-1] / cap_garp) - 1
+    garp_m   = compute_metrics(garp_portfolio, tbill_rate, cap_garp)
+    print(f"  GARP return: {garp_ret:+.1%}  |  Sharpe: {garp_m['Sharpe Ratio']}")
 
     # ── Run Cross-Asset Trend ─────────────────────────────────
-    # Same AFP engine on SPY/TLT/GLD — no QQQ/USMV present so the
-    # correlation filter returns 1.0 (disabled), giving pure cross-asset
-    # momentum with inverse-vol sizing.
     print("[XAT] Running cross-asset trend (SPY · TLT · GLD) …")
     xat_portfolio = run_factor_backtest(
         xat_prices, tbill_rate, cap_xat,
-        LOOKBACK_MONTHS, 1.0,             # no rank tilt for cross-asset
-        CORR_WINDOW, CORR_HIGH, CORR_MID, # filter inactive (no QQQ/USMV)
-        TARGET_VOL, 0.60, MAX_LEVERAGE, VOL_LOOKBACK,  # wider per-asset cap (3 assets)
-        TRANSACTION_COST, DRAWDOWN_STOP,
+        AFP_LB, 1.0,
+        CORR_WINDOW, CORR_HIGH, CORR_MID,
+        AFP_VOL, 0.60, AFP_LEV, AFP_VOLLB,
+        AFP_TC, AFP_DD,
     )
     xat_ret = (xat_portfolio["portfolio_value"].iloc[-1] / cap_xat) - 1
-    print(f"  XAT total return: {xat_ret:+.1%}")
+    xat_m   = compute_metrics(xat_portfolio, tbill_rate, cap_xat)
+    print(f"  XAT return: {xat_ret:+.1%}  |  Sharpe: {xat_m['Sharpe Ratio']}")
 
     # ── Run SIS ───────────────────────────────────────────────
     print("[SIS] Running intraday afternoon short …")
-    bars        = fetch_intraday("SPY", START_DATE, END_DATE,
-                                 timeframe="5Min", cache_dir=DATA_CACHE_DIR)
-    sis_signals = compute_daily_signals(bars, MIN_MORNING_MOVE, MIN_OVERNIGHT_GAP)
+    bars         = fetch_intraday("SPY", START_DATE, END_DATE,
+                                  timeframe="5Min", cache_dir=DATA_CACHE_DIR)
+    sis_signals  = compute_daily_signals(bars, MIN_MORNING_MOVE, MIN_OVERNIGHT_GAP)
     sis_portfolio = run_intraday_backtest(
         sis_signals, tbill_rate, cap_sis, SIS_TC, SIS_STOP,
     )
     sis_ret = (sis_portfolio["portfolio_value"].iloc[-1] / cap_sis) - 1
-    print(f"  SIS total return: {sis_ret:+.1%}")
+    sis_m   = compute_metrics(sis_portfolio, tbill_rate, cap_sis)
+    print(f"  SIS return: {sis_ret:+.1%}  |  Sharpe: {sis_m['Sharpe Ratio']}")
 
     # ── Combine ───────────────────────────────────────────────
     print("\n[portfolio] Combining …")
-    date_range = (afp_portfolio.index
+    date_range = (garp_portfolio.index
                   .union(xat_portfolio.index)
                   .union(sis_portfolio.index))
 
-    afp_val = afp_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_afp)
-    xat_val = xat_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_xat)
-    sis_val = sis_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_sis)
+    garp_val = garp_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_garp)
+    xat_val  = xat_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_xat)
+    sis_val  = sis_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_sis)
 
-    combined_val = afp_val + xat_val + sis_val
+    combined_val = garp_val + xat_val + sis_val
     combined     = pd.DataFrame(index=date_range)
     combined["portfolio_value"] = combined_val
     combined["daily_return"]    = combined_val.pct_change().fillna(0)
     combined["in_regime"]       = True
 
     # ── Metrics ───────────────────────────────────────────────
-    metrics  = compute_metrics(combined, tbill_rate, INITIAL_CAPITAL)
-    spy_t    = spy_cumulative.reindex(combined.index).ffill()
-    spy_tot  = (spy_t.iloc[-1] / spy_t.iloc[0]) - 1
+    metrics      = compute_metrics(combined, tbill_rate, INITIAL_CAPITAL)
+    spy_t        = spy_cumulative.reindex(combined.index).ffill()
+    spy_tot      = (spy_t.iloc[-1] / spy_t.iloc[0]) - 1
     combined_tot = (combined_val.iloc[-1] / INITIAL_CAPITAL) - 1
 
     print("\nInvestor Portfolio Summary")
-    print("-" * 54)
+    print("─" * 56)
     for k, v in metrics.items():
         print(f"  {k:<36} {v}")
     print(f"  {'SPY Buy-and-Hold (same window)':<36} {spy_tot:.2%}")
 
-    print("\nComponent Summary")
-    print("-" * 54)
+    print("\nComponent Breakdown")
+    print("─" * 56)
     rows = [
-        ("AFP  50%", afp_portfolio, cap_afp),
-        ("XAT  30%", xat_portfolio, cap_xat),
-        ("SIS  20%", sis_portfolio, cap_sis),
+        (f"GARP  {WEIGHT_GARP:.0%}", garp_portfolio, cap_garp),
+        (f"XAT   {WEIGHT_XAT:.0%}", xat_portfolio,  cap_xat),
+        (f"SIS   {WEIGHT_SIS:.0%}", sis_portfolio,   cap_sis),
     ]
     for label, pf, cap in rows:
         ret = (pf["portfolio_value"].iloc[-1] / cap) - 1
@@ -205,20 +220,20 @@ def main():
     # ── Plot ──────────────────────────────────────────────────
     fig, axes = plt.subplots(3, 1, figsize=(13, 15))
     fig.suptitle(
-        "Investor Portfolio  (50% AFP  ·  30% Cross-Asset Trend  ·  20% Intraday Short)\n"
-        "Designed for Sharpe > 1 and Max DD < 20%  —  not for maximum raw return",
-        fontsize=12, fontweight="bold",
+        "Investor Portfolio  (40% GARP Momentum  ·  40% Cross-Asset Trend  ·  20% Intraday Short)\n"
+        "Three uncorrelated return engines  —  individual stock alpha + bonds/gold hedge + market-neutral",
+        fontsize=11, fontweight="bold",
     )
 
-    # Panel 1: Investor portfolio vs SPY vs previous combined
+    # Panel 1: Combined vs SPY vs T-bill
     ax = axes[0]
-    inv_r  = combined_val / INITIAL_CAPITAL * 100
-    spy_r  = spy_t / INITIAL_CAPITAL * 100
-    tb_r   = tbill_cumulative.reindex(combined.index).ffill() / INITIAL_CAPITAL * 100
-    ax.plot(inv_r.index, inv_r,  label="Investor Portfolio", color="steelblue", linewidth=2.2)
-    ax.plot(spy_r.index, spy_r,  label="SPY (buy & hold)",   color="darkorange",
+    inv_r = combined_val / INITIAL_CAPITAL * 100
+    spy_r = spy_t / INITIAL_CAPITAL * 100
+    tb_r  = tbill_cumulative.reindex(combined.index).ffill() / INITIAL_CAPITAL * 100
+    ax.plot(inv_r.index, inv_r, label="Investor Portfolio", color="steelblue", linewidth=2.2)
+    ax.plot(spy_r.index, spy_r, label="SPY (buy & hold)",   color="darkorange",
             linestyle="--", linewidth=1.5)
-    ax.plot(tb_r.index,  tb_r,   label="T-bill (BIL)",       color="seagreen",
+    ax.plot(tb_r.index,  tb_r,  label="T-bill (BIL)",       color="seagreen",
             linestyle=":", linewidth=1.2)
     ax.axhline(100, color="black", linewidth=0.4, linestyle=":")
     ax.set_ylabel("Value (rebased to 100)")
@@ -226,16 +241,16 @@ def main():
     ax.legend(fontsize=9)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-    # Panel 2: Stacked P&L contribution
+    # Panel 2: Stacked P&L by sleeve
     ax = axes[1]
-    a = afp_val - cap_afp
-    x = xat_val - cap_xat
-    s = sis_val - cap_sis
-    ax.fill_between(a.index, 0, a, color="steelblue", alpha=0.75,
-                    label=f"AFP 50% (equity factors)")
-    ax.fill_between(x.index, a, a + x, color="#e9c46a", alpha=0.75,
-                    label=f"XAT 30% (SPY·TLT·GLD trend)")
-    ax.fill_between(s.index, a + x, a + x + s, color="seagreen", alpha=0.75,
+    g = garp_val - cap_garp
+    x = xat_val  - cap_xat
+    s = sis_val  - cap_sis
+    ax.fill_between(g.index, 0,   g,         color="#2c7bb6", alpha=0.75,
+                    label=f"GARP 40% (individual stocks)")
+    ax.fill_between(x.index, g,   g + x,     color="#e9c46a", alpha=0.75,
+                    label=f"XAT 40% (SPY · TLT · GLD)")
+    ax.fill_between(s.index, g+x, g + x + s, color="seagreen", alpha=0.75,
                     label=f"SIS 20% (intraday short)")
     ax.axhline(0, color="black", linewidth=0.5)
     ax.set_ylabel("Cumulative P&L ($)")
@@ -243,15 +258,15 @@ def main():
     ax.legend(fontsize=8)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-    # Panel 3: Drawdown comparison
+    # Panel 3: Drawdown vs SPY
     ax = axes[2]
-    for vals, init, label, color, lw, ls in [
-        (combined_val, INITIAL_CAPITAL, "Investor Portfolio", "steelblue", 2.2, "-"),
-        (spy_t, INITIAL_CAPITAL, "SPY B&H", "darkorange", 1.3, "--"),
+    for vals, label, color, lw, ls in [
+        (combined_val, "Investor Portfolio", "steelblue",   2.2, "-"),
+        (spy_t,        "SPY B&H",            "darkorange",  1.3, "--"),
     ]:
         rm = vals.cummax()
         dd = (vals - rm) / rm * 100
-        ax.fill_between(dd.index, dd, 0, color=color, alpha=0.25)
+        ax.fill_between(dd.index, dd, 0, color=color, alpha=0.20)
         ax.plot(dd.index, dd, color=color, linewidth=lw, linestyle=ls, label=label)
 
     ax.axhline(-20, color="black", linewidth=0.8, linestyle=":",
