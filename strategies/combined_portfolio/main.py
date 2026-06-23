@@ -18,7 +18,7 @@ Allocation (45 / 45 / 10):
   45%  GARP  — Growth-at-Reasonable-Price + Momentum (individual stock alpha)
                TMT universe: AAPL · MSFT · GOOGL · META · NVDA · AMD · AVGO …
                Sharpe 1.12 · Return +130% · Max DD −26%  (2020–2024)
-  45%  XAT   — Cross-Asset Trend (SPY · TLT · GLD momentum)
+  45%  XAT   — Cross-Asset Trend (TLT · GLD momentum)
                Equal weight to GARP — individual stocks need more bond/gold
                ballast than factor ETFs.
                Genuine drawdown protection in rate shocks and risk-off episodes.
@@ -93,13 +93,13 @@ def main():
     cap_sis  = INITIAL_CAPITAL * WEIGHT_SIS
 
     print(f"\n{'='*68}")
-    print("  INVESTOR PORTFOLIO  (40 / 40 / 20)")
+    print("  INVESTOR PORTFOLIO  (45 / 45 / 10)")
     print(f"{'='*68}")
     print(f"  Period        : {START_DATE}  →  {END_DATE}")
     print(f"  Total capital : ${INITIAL_CAPITAL:,.0f}")
-    print(f"  GARP  40%  = ${cap_garp:,.0f}  GARP Momentum (individual stocks)")
-    print(f"  XAT   40%  = ${cap_xat:,.0f}  Cross-Asset Trend (SPY · TLT · GLD)")
-    print(f"  SIS   20%  = ${cap_sis:,.0f}  SPY Intraday Short")
+    print(f"  GARP  45%  = ${cap_garp:,.0f}  GARP Momentum (individual stocks)")
+    print(f"  XAT   45%  = ${cap_xat:,.0f}  Cross-Asset Trend (TLT · GLD)")
+    print(f"  SIS   10%  = ${cap_sis:,.0f}  SPY Intraday Short")
     print(f"  Design goal   : Sharpe > 1.0  |  Max DD < 20%")
     print(f"{'='*68}\n")
 
@@ -148,7 +148,7 @@ def main():
     print(f"  GARP return: {garp_ret:+.1%}  |  Sharpe: {garp_m['Sharpe Ratio']}")
 
     # ── Run Cross-Asset Trend ─────────────────────────────────
-    print("[XAT] Running cross-asset trend (SPY · TLT · GLD) …")
+    print("[XAT] Running cross-asset trend (TLT · GLD) …")
     xat_portfolio = run_factor_backtest(
         xat_prices, tbill_rate, cap_xat,
         AFP_LB, 1.0,
@@ -252,7 +252,7 @@ def main():
     ax.fill_between(g.index, 0,   g,         color="#2c7bb6", alpha=0.75,
                     label=f"GARP 40% (individual stocks)")
     ax.fill_between(x.index, g,   g + x,     color="#e9c46a", alpha=0.75,
-                    label=f"XAT 40% (SPY · TLT · GLD)")
+                    label=f"XAT 45% (TLT · GLD)")
     ax.fill_between(s.index, g+x, g + x + s, color="seagreen", alpha=0.75,
                     label=f"SIS 20% (intraday short)")
     ax.axhline(0, color="black", linewidth=0.5)

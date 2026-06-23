@@ -10,23 +10,23 @@ All strategies are benchmarked on the same window: **2020–2024** — the earli
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 0.84 &nbsp;|&nbsp; **Return:** +69% &nbsp;|&nbsp; **Max DD:** −17.6% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 0.80 &nbsp;|&nbsp; **Return:** +61% &nbsp;|&nbsp; **Max DD:** −15.4% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Three uncorrelated return engines sharing capital:
 
 | Sleeve | Weight | Strategy | Purpose |
 |---|---|---|---|
-| GARP | 45% | GARP Momentum (individual stocks) | Equity alpha — individual stock selection via PEG, ROE, FCF, momentum |
-| XAT | 45% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
+| GARP | 45% | GARP Momentum (individual stocks) | Equity alpha — stock selection via PEG, ROE, FCF, momentum |
+| XAT | 45% | Cross-Asset Trend (TLT · GLD) | Pure defensive hedge — bonds and gold are structurally uncorrelated to equities |
 | SIS | 10% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
 
-**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine over this window (Sharpe 1.12 vs 0.40; +130% vs +28% standalone). XAT gets equal weight because individual stocks need more bond/gold ballast than factor ETFs did.
+**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine over this window (Sharpe 1.12 vs 0.40; +130% vs +28% standalone).
+
+**Why XAT holds only TLT and GLD (not SPY):** GARP already provides equity exposure. Including SPY in XAT meant the portfolio was doubly long equities — the intended hedge was partially cancelling itself. TLT and GLD are structurally uncorrelated to equities: bonds rally in deflationary shocks and flight-to-safety events; gold rallies in currency crises and stagflation. These are the scenarios where GARP would suffer most.
 
 **Why SIS is sized at 10%:** SIS only deploys capital on ~18% of trading days. A 20% static allocation left capital idle in T-bills 82% of the time, dragging on portfolio Sharpe without adding proportional return. 10% keeps SIS's uncorrelated alpha in the mix while halving the idle capital drag — a structural sizing argument, not a backtest optimisation.
 
-**Result:** Sharpe 0.84, +69% total return, Max DD −18% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT (bonds + gold) being a drag during the 2022 rate hike cycle. The benefit shows in drawdown: −18% vs GARP standalone's −26%.
-
-**Honest assessment:** GARP standalone actually has both higher return (+130%) and higher Sharpe (1.12) than the mixed portfolio over this window — which raises a fair question about whether diversification adds value here. The answer depends on what you believe about the future. The 2020–2024 window was specifically hostile to the portfolio's diversification thesis: in 2022, the Fed's aggressive rate hikes caused bonds and stocks to fall *simultaneously*, which is historically unusual. TLT dropped ~30% that year, removing XAT's hedging power at exactly the wrong moment. In a more typical drawdown (2008-style, or a 2020-style liquidity shock), bonds rally as stocks fall and XAT acts as a genuine cushion. The portfolio is built for that regime. The goal is not to maximise return in any single window but to maintain three structurally independent return sources — equity momentum (GARP), cross-asset trend (XAT), and intraday mean-reversion (SIS) — whose failure modes do not coincide.
+**Result:** Sharpe 0.80, +61% total return, Max DD −15.4% over 2020–2024. SPY returned +95% over the same window. The portfolio lagged in raw return because 2020–2024 was an unusually hostile period for the diversification thesis: in 2022, the Fed's aggressive rate hikes caused bonds and stocks to fall *simultaneously* — TLT dropped ~30%, removing XAT's hedging power at exactly the wrong moment. In a more typical drawdown (2008-style deflationary shock, or a 2020-style liquidity crisis), TLT and GLD would rally as equities fall, and XAT would act as a genuine cushion. The portfolio is built for that regime. The goal is not to maximise return in any single window but to maintain three structurally independent return sources whose failure modes do not coincide.
 
 ---
 
@@ -45,17 +45,27 @@ AFP's modest 2020–2024 numbers reflect the difficulty of rotating between fact
 
 ---
 
-### 2. SPY Intraday Afternoon Short
+### 2. Cross-Asset Trend (XAT)
+**File:** `strategies/combined_portfolio/main.py` (runs as a sleeve within the investor portfolio)  
+**Sharpe:** −0.32 &nbsp;|&nbsp; **Return:** +2.4% &nbsp;|&nbsp; **Max DD:** −11.7% &nbsp;|&nbsp; **Period:** 2020–2024
+
+Applies the same momentum and inverse-volatility weighting framework as AFP, but to two pure defensive assets — TLT (20+ year US Treasuries) and GLD (gold). Each month it ranks TLT and GLD by composite momentum; the leading asset gets a 1.5× rank tilt. When neither has positive momentum, the sleeve holds T-bills entirely.
+
+XAT's role is structural, not return-generative. Its poor standalone numbers in this window are a direct consequence of 2022: the Fed's fastest rate hiking cycle since the 1980s drove TLT down ~30% while gold also struggled against rising real rates. Both assets failed simultaneously — the one historical scenario where a bonds+gold hedge breaks down. In every other modern drawdown (2008, 2020, dot-com), TLT and GLD provided meaningful positive returns as equities fell.
+
+---
+
+### 3. SPY Intraday Afternoon Short (SIS)
 **File:** `strategies/spy_intraday_short/main.py`  
 **Sharpe:** 0.10 &nbsp;|&nbsp; **Return:** +14% &nbsp;|&nbsp; **Max DD:** −5.8% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the overnight gap and first 30-minute return exceed minimum thresholds and agree in direction — **shorts the last 30 minutes of the session**. Up mornings reverse (61% win); down mornings continue (62% win). Active only 18% of days; earns T-bill on the rest.
 
-**On the low Sharpe:** The 0.10 figure is a measurement artefact of capital dilution, not a reflection of poor signal quality. Because SIS is only active 18% of days, the other 82% contribute zero excess return while still counting in the Sharpe denominator. This mechanically suppresses the ratio by a factor of roughly √0.18 ≈ 0.42 versus a strategy that trades every day with equivalent signal. The strategy's actual edge — a 61–62% win rate on a genuinely market-neutral signal — is sound. Its value in the portfolio is structural: it earns on a completely different clock to GARP and XAT, and its −5.8% max drawdown means it never meaningfully hurts the portfolio even in its worst periods.
+**On the low Sharpe:** The 0.10 figure is a measurement artefact of capital dilution, not a reflection of poor signal quality. Because SIS is only active 18% of days, the other 82% contribute zero excess return while still counting in the Sharpe denominator. This mechanically suppresses the ratio by a factor of roughly √0.18 ≈ 0.42. The strategy's actual edge — a 61–62% win rate on a genuinely market-neutral signal — is sound. Its value in the portfolio is structural: it earns on a completely different clock to GARP and XAT, with a −5.8% max drawdown that means it never meaningfully hurts the portfolio even in its worst periods.
 
 ---
 
-### 3. GARP Momentum
+### 4. GARP Momentum
 **File:** `strategies/garp_momentum/main.py`  
 **Sharpe:** 1.12 &nbsp;|&nbsp; **Return:** +130% &nbsp;|&nbsp; **Max DD:** −25.6% &nbsp;|&nbsp; **Period:** 2020–2024
 
@@ -80,7 +90,7 @@ Six ratios are scored and combined into a composite GARP quality rank:
 
 ---
 
-### 4. Tech-Tier Momentum Ladder (reference)
+### 5. Tech-Tier Momentum Ladder (reference)
 **File:** `strategies/concentrated_momentum/main.py`  
 **Return:** +46% &nbsp;|&nbsp; **Sharpe:** 0.21 &nbsp;|&nbsp; **Max DD:** −32.1% &nbsp;|&nbsp; **Period:** 2020–2024
 
@@ -98,15 +108,15 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 │
 ├── strategies/
 │   ├── combined_portfolio/        ★ The recommended investor portfolio
-│   │   ├── main.py                Run this
-│   │   └── config.py              45/45/10 weights
+│   │   ├── main.py                Run this (also runs XAT sleeve)
+│   │   └── config.py              45/45/10 weights; XAT universe (TLT · GLD)
 │   │
 │   ├── equity_factor_rotation/    AFP — lowest drawdown, factor rotation
-│   │   ├── main.py
+│   │   ├── main.py                Also provides the backtest engine used by XAT
 │   │   ├── backtest.py
 │   │   └── config.py
 │   │
-│   ├── spy_intraday_short/        Intraday alpha / hedge
+│   ├── spy_intraday_short/        SIS — intraday market-neutral alpha
 │   │   ├── main.py
 │   │   ├── strategy.py
 │   │   ├── data_intraday.py
@@ -114,7 +124,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 │   │   ├── STRATEGY.md
 │   │   └── generate_pdf.py
 │   │
-│   ├── garp_momentum/             GARP + momentum — best standalone Sharpe (1.12)
+│   ├── garp_momentum/             GARP — best standalone Sharpe (1.12)
 │   │   ├── main.py
 │   │   ├── backtest.py
 │   │   ├── fundamentals.py        yfinance GARP scoring (PEG, ROE, EV/EBITDA, FCF, margin, D/E)
@@ -139,7 +149,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Us
 All commands from the project root.
 
 ```bash
-# ★ Recommended: investor portfolio (45% GARP + 45% cross-asset + 10% intraday)
+# ★ Recommended: investor portfolio (45% GARP + 45% XAT + 10% SIS)
 python -m strategies.combined_portfolio.main
 
 # Individual strategies

@@ -12,7 +12,6 @@ WEIGHT_SIS  = 0.10   # SPY Intraday Short         (market-neutral alpha; active 
 
 # ── Cross-asset universe ──────────────────────────────────────
 XAT_TICKERS = {
-    "SPY": "SPDR S&P 500 ETF",
     "TLT": "iShares 20+ Year Treasury Bond",
     "GLD": "SPDR Gold Shares",
 }
