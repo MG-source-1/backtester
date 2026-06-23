@@ -2,6 +2,8 @@
 
 A modular systematic trading backtester. All data is sourced from **Alpaca Markets** (SIP feed) and yahoo finance.
 
+All strategies are benchmarked on the same window: **2020–2024** — the earliest period where every data source (daily prices, intraday SPY bars, T-bill proxy) is fully available.
+
 ---
 
 ## Portfolio
@@ -18,9 +20,9 @@ Three uncorrelated return engines sharing capital:
 | XAT | 40% | Cross-Asset Trend (SPY·TLT·GLD) | Genuine diversification — bonds and gold protect in equity drawdowns |
 | SIS | 20% | SPY Intraday Short | Market-neutral daily alpha, uncorrelated to everything else |
 
-**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine (Sharpe 1.29 vs 0.97; +575% vs +130% standalone). XAT gets equal weight to AFP's old 50% because individual stocks need more bond/gold ballast than factor ETFs did.
+**Why GARP replaced AFP:** AFP (factor ETFs) and GARP (individual stocks) are both long-equity — running both just doubles equity exposure without diversification benefit. GARP is strictly better as the equity engine over this window (Sharpe 1.12 vs 0.40; +130% vs +28% standalone). XAT gets equal weight because individual stocks need more bond/gold ballast than factor ETFs did.
 
-**Result:** Sharpe 0.84, +63% total return, Max DD −16% over 2020–2024. SPY returned +95% over the same window — the portfolio underperformed in this period due to XAT (bonds + gold) being a drag during the 2022 rate hike cycle. The diversification benefit shows in the much lower max drawdown (−16% vs SPY's implied drawdown over this window).
+**Result:** Sharpe 0.84, +63% total return, Max DD −16% over 2020–2024. SPY returned +95% over the same window — the portfolio lagged in raw return due to XAT being a drag during the 2022 rate hike cycle (bonds fell alongside stocks, an historically unusual event). The benefit shows in drawdown: −16% vs GARP standalone's −26%.
 
 ---
 
@@ -28,7 +30,7 @@ Three uncorrelated return engines sharing capital:
 
 ### 1. Adaptive Factor Portfolio (AFP)
 **File:** `strategies/equity_factor_rotation/main.py`  
-**Sharpe:** 0.97 &nbsp;|&nbsp; **Return:** +130% &nbsp;|&nbsp; **Max DD:** −13.6% &nbsp;|&nbsp; **Period:** 2016–2024
+**Sharpe:** 0.40 &nbsp;|&nbsp; **Return:** +28% &nbsp;|&nbsp; **Max DD:** −13.6% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Rotates monthly between four US equity factor ETFs — QQQ (growth/tech), QUAL (quality), MTUM (momentum), USMV (min-vol) — using composite momentum with two creative additions:
 
@@ -39,7 +41,7 @@ Rotates monthly between four US equity factor ETFs — QQQ (growth/tech), QUAL (
 
 ### 2. SPY Intraday Afternoon Short
 **File:** `strategies/spy_intraday_short/main.py`  
-**Sharpe:** 0.72 &nbsp;|&nbsp; **Return:** +21% &nbsp;|&nbsp; **Max DD:** −4.1% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 0.10 &nbsp;|&nbsp; **Return:** +14% &nbsp;|&nbsp; **Max DD:** −5.8% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the overnight gap and first 30-minute return exceed minimum thresholds and agree in direction — **shorts the last 30 minutes of the session**. Up mornings reverse (61% win); down mornings continue (62% win). Active only 18% of days; earns T-bill on the rest.
 
@@ -47,7 +49,7 @@ Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the ove
 
 ### 3. GARP Momentum
 **File:** `strategies/garp_momentum/main.py`  
-**Sharpe:** 1.29 &nbsp;|&nbsp; **Return:** +575% &nbsp;|&nbsp; **Max DD:** −25.6% &nbsp;|&nbsp; **Period:** 2016–2024
+**Sharpe:** 1.12 &nbsp;|&nbsp; **Return:** +130% &nbsp;|&nbsp; **Max DD:** −25.6% &nbsp;|&nbsp; **Period:** 2020–2024
 
 Applies **Growth at a Reasonable Price (GARP)** fundamental screening to a 15-stock TMT universe (AAPL, MSFT, GOOGL, META, NVDA, AMD, AVGO, QCOM, ORCL, CRM, ADBE, NFLX, AMZN, TSLA, INTC), then selects and sizes positions using **Jegadeesh-Titman price momentum**.
 
@@ -72,9 +74,9 @@ Six ratios are scored and combined into a composite GARP quality rank:
 
 ### 4. Tech-Tier Momentum Ladder (reference)
 **File:** `strategies/concentrated_momentum/main.py`  
-**Return:** +305% &nbsp;|&nbsp; **Sharpe:** 0.54 &nbsp;|&nbsp; **Max DD:** −34.3% &nbsp;|&nbsp; **Period:** 2016–2024
+**Return:** +46% &nbsp;|&nbsp; **Sharpe:** 0.21 &nbsp;|&nbsp; **Max DD:** −32.1% &nbsp;|&nbsp; **Period:** 2020–2024
 
-Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Beats SPY's +237% raw return by riding SOXX's +701% semiconductor bull, with SPY as a defensive floor when all three have negative momentum. Kept as a reference — the concentration and −34% drawdown make it unsuitable as a standalone primary strategy.
+Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Uses SPY as a defensive floor when all three have negative momentum. Kept as a reference — the concentration and −32% drawdown make it unsuitable as a standalone primary strategy.
 
 ---
 
@@ -89,9 +91,9 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Be
 ├── strategies/
 │   ├── combined_portfolio/        ★ The recommended investor portfolio
 │   │   ├── main.py                Run this
-│   │   └── config.py              50/30/20 weights
+│   │   └── config.py              40/40/20 weights
 │   │
-│   ├── equity_factor_rotation/    AFP — best standalone Sharpe (0.97)
+│   ├── equity_factor_rotation/    AFP — low drawdown, factor rotation
 │   │   ├── main.py
 │   │   ├── backtest.py
 │   │   └── config.py
@@ -104,7 +106,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Be
 │   │   ├── STRATEGY.md
 │   │   └── generate_pdf.py
 │   │
-│   ├── garp_momentum/             GARP + momentum — best standalone Sharpe (1.23)
+│   ├── garp_momentum/             GARP + momentum — best standalone Sharpe (1.12)
 │   │   ├── main.py
 │   │   ├── backtest.py
 │   │   ├── fundamentals.py        yfinance GARP scoring (PEG, ROE, EV/EBITDA, FCF, margin, D/E)
@@ -117,7 +119,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Be
 │
 ├── data_cache/            Cached Alpaca downloads (gitignored)
 ├── outputs/               Charts and CSVs (gitignored)
-├── config.py              Shared: dates, capital, absolute paths
+├── config.py              Shared: dates (2020–2024), capital, absolute paths
 ├── .env                   Alpaca API credentials (gitignored — never commit)
 └── requirements.txt
 ```
@@ -129,7 +131,7 @@ Concentrates monthly into the highest-momentum ETF from SOXX → QQQ → SPY. Be
 All commands from the project root.
 
 ```bash
-# ★ Recommended: investor portfolio (50% AFP + 30% cross-asset + 20% intraday)
+# ★ Recommended: investor portfolio (40% GARP + 40% cross-asset + 20% intraday)
 python -m strategies.combined_portfolio.main
 
 # Individual strategies
@@ -169,9 +171,9 @@ ALPACA_SECRET=your-secret-here
 | Data | Source | Notes |
 |---|---|---|
 | ETF / stock daily prices | Alpaca SIP `1Day` bars, `adjustment=all` | Total return (splits + dividends included) |
-| SPY 5-min intraday | Alpaca SIP `5Min` bars | ~400k bars, 2016–2024 |
+| SPY 5-min intraday | Alpaca SIP `5Min` bars | ~230k bars, 2020–2024 |
 | T-bill proxy | BIL ETF daily return | SPDR 1-3 Month T-Bill ETF |
-| Fundamental data | yfinance (live snapshot) | PEG, ROE, EV/EBITDA, FCF yield — GARP strategy only |
+| Fundamental data | yfinance (point-in-time quarterly filings) | PEG, ROE, EV/EBITDA, FCF yield — GARP strategy only |
 
 ---
 
