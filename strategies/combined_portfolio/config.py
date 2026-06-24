@@ -6,13 +6,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from config import START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
 
 # ── Allocation weights ────────────────────────────────────────
-WEIGHT_GARP = 0.70   # Primary alpha engine — TMT quality-momentum
-WEIGHT_XAT  = 0.20   # Cross-asset trend — regime diversifier; holds SPY, TLT, or GLD
-WEIGHT_SIS  = 0.10   # SPY Intraday Short — market-neutral, ~18% active days
+# SIS removed from the live portfolio — it requires 5-min intraday data
+# only available from 2020, which would shorten the backtest window by 4 years.
+# SIS is retained as a reference strategy.
+WEIGHT_GARP = 0.80   # Primary alpha engine
+WEIGHT_XAT  = 0.20   # Cross-asset trend — regime diversifier
 
 # ── Cross-asset rotation universe ─────────────────────────────
-# SPY is included so XAT can participate in equity upside when momentum favours
-# equities, while rotating into TLT or GLD for protection during risk-off regimes.
 XAT_TICKERS = {
     "SPY": "SPDR S&P 500 ETF",
     "TLT": "iShares 20+ Year Treasury Bond",

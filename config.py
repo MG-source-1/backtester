@@ -10,7 +10,7 @@ DATA_CACHE_DIR = os.path.join(ROOT_DIR, "data_cache")
 OUTPUT_DIR     = os.path.join(ROOT_DIR, "outputs")
 
 # ── Backtest window ───────────────────────────────────────────
-START_DATE      = "2020-01-01"
+START_DATE      = "2016-01-01"
 END_DATE        = "2024-12-31"
 INITIAL_CAPITAL = 100_000
 

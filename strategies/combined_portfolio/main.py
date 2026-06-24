@@ -1,25 +1,24 @@
 """
-Investor Portfolio — three uncorrelated return engines.
+Investor Portfolio — GARP Momentum + Cross-Asset Trend.
 
-  70%  GARP  — TMT Growth-at-Reasonable-Price + Momentum.
+  80%  GARP  — TMT Growth-at-Reasonable-Price + Momentum.
                Individual stock alpha: selects top 5 from a 15-stock TMT
                universe using price momentum + fundamental quality (PEG,
-               ROE, EV/EBITDA, FCF yield, net margin, D/E).
-               Three internal risk overlays provide downside protection:
-                 • 20% vol target   — scales when portfolio volatility spikes
+               ROE, EV/EBITDA, FCF yield, net margin, D/E) from SEC EDGAR.
+               Three internal risk overlays:
+                 • 20% vol target   — scales exposure when volatility spikes
                  • SPY regime filter — cuts to 0.6× / 0.3× in market downtrends
                  • 15% drawdown stop — moves to cash for 21 days after large loss
 
   20%  XAT   — Cross-Asset Trend (SPY · TLT · GLD).
                Ranks SPY, TLT (bonds), and GLD (gold) by momentum each month.
                Participates in equity upside when SPY leads; rotates to bonds
-               or gold in risk-off regimes.  SPY is included so XAT can earn
-               returns in good environments, not just protect in bad ones.
+               or gold in risk-off regimes. SPY is included so XAT can earn
+               in good environments, not just protect in bad ones.
 
-  10%  SIS   — SPY Intraday Afternoon Short.
-               Market-neutral; earns on a completely different clock to GARP
-               and XAT.  Sized at 10% because it only deploys ~18% of days —
-               a larger slice leaves capital idle in T-bills most of the time.
+SIS (SPY Intraday Short) is excluded because it requires 5-minute intraday
+bars only available from 2020, which would shorten the backtest by 4 years.
+It is retained as a reference strategy.
 
 Run from project root:
     python -m strategies.combined_portfolio.main
@@ -66,16 +65,9 @@ from strategies.equity_factor_rotation.config import (
     TRANSACTION_COST as AFP_TC, DRAWDOWN_STOP as AFP_DD,
 )
 
-from strategies.spy_intraday_short.data_intraday import fetch_bars as fetch_intraday
-from strategies.spy_intraday_short.strategy import compute_daily_signals, run_intraday_backtest
-from strategies.spy_intraday_short.config import (
-    MIN_MORNING_MOVE, MIN_OVERNIGHT_GAP,
-    TC as SIS_TC, DD_STOP as SIS_STOP,
-)
-
 from strategies.combined_portfolio.config import (
     START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR,
-    WEIGHT_GARP, WEIGHT_XAT, WEIGHT_SIS,
+    WEIGHT_GARP, WEIGHT_XAT,
     XAT_TICKERS,
 )
 
@@ -85,16 +77,14 @@ def main():
 
     cap_garp = INITIAL_CAPITAL * WEIGHT_GARP
     cap_xat  = INITIAL_CAPITAL * WEIGHT_XAT
-    cap_sis  = INITIAL_CAPITAL * WEIGHT_SIS
 
     print(f"\n{'='*68}")
-    print(f"  INVESTOR PORTFOLIO  ({WEIGHT_GARP:.0%} GARP  ·  {WEIGHT_XAT:.0%} XAT  ·  {WEIGHT_SIS:.0%} SIS)")
+    print(f"  INVESTOR PORTFOLIO  ({WEIGHT_GARP:.0%} GARP  ·  {WEIGHT_XAT:.0%} XAT)")
     print(f"{'='*68}")
     print(f"  Period        : {START_DATE}  →  {END_DATE}")
     print(f"  Total capital : ${INITIAL_CAPITAL:,.0f}")
     print(f"  GARP  {WEIGHT_GARP:.0%}  = ${cap_garp:,.0f}  TMT quality-momentum (individual stocks)")
     print(f"  XAT   {WEIGHT_XAT:.0%}  = ${cap_xat:,.0f}  Cross-Asset Trend (SPY · TLT · GLD)")
-    print(f"  SIS   {WEIGHT_SIS:.0%}  = ${cap_sis:,.0f}  SPY Intraday Short")
     print(f"  Design goal   : Sharpe > 1.0  |  Max DD < 25%")
     print(f"{'='*68}\n")
 
@@ -155,30 +145,14 @@ def main():
     xat_m   = compute_metrics(xat_portfolio, tbill_rate, cap_xat)
     print(f"  XAT return:  {xat_ret:+.1%}  |  Sharpe: {xat_m['Sharpe Ratio']}  |  Max DD: {xat_m['Max Drawdown']}")
 
-    # ── Run SIS ───────────────────────────────────────────────
-    print("[SIS] Running intraday afternoon short …")
-    bars         = fetch_intraday("SPY", START_DATE, END_DATE,
-                                  timeframe="5Min", cache_dir=DATA_CACHE_DIR)
-    sis_signals  = compute_daily_signals(bars, MIN_MORNING_MOVE, MIN_OVERNIGHT_GAP)
-    sis_portfolio = run_intraday_backtest(
-        sis_signals, tbill_rate, cap_sis, SIS_TC, SIS_STOP,
-    )
-    sis_ret = (sis_portfolio["portfolio_value"].iloc[-1] / cap_sis) - 1
-    sis_m   = compute_metrics(sis_portfolio, tbill_rate, cap_sis)
-    print(f"  SIS return:  {sis_ret:+.1%}  |  Sharpe: {sis_m['Sharpe Ratio']}  |  Max DD: {sis_m['Max Drawdown']}")
-
     # ── Combine ───────────────────────────────────────────────
     print("\n[portfolio] Combining …")
-    date_range = (garp_portfolio.index
-                  .union(xat_portfolio.index)
-                  .union(sis_portfolio.index))
+    date_range   = garp_portfolio.index.union(xat_portfolio.index)
+    garp_val     = garp_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_garp)
+    xat_val      = xat_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_xat)
+    combined_val = garp_val + xat_val
 
-    garp_val = garp_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_garp)
-    xat_val  = xat_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_xat)
-    sis_val  = sis_portfolio["portfolio_value"].reindex(date_range).ffill().fillna(cap_sis)
-
-    combined_val = garp_val + xat_val + sis_val
-    combined     = pd.DataFrame(index=date_range)
+    combined = pd.DataFrame(index=date_range)
     combined["portfolio_value"] = combined_val
     combined["daily_return"]    = combined_val.pct_change().fillna(0)
 
@@ -199,7 +173,6 @@ def main():
     for label, pf, cap in [
         (f"GARP  {WEIGHT_GARP:.0%}", garp_portfolio, cap_garp),
         (f"XAT   {WEIGHT_XAT:.0%}",  xat_portfolio,  cap_xat),
-        (f"SIS   {WEIGHT_SIS:.0%}",  sis_portfolio,   cap_sis),
     ]:
         ret = (pf["portfolio_value"].iloc[-1] / cap) - 1
         m   = compute_metrics(pf, tbill_rate, cap)
@@ -215,8 +188,8 @@ def main():
     # ── Charts ────────────────────────────────────────────────
     fig, axes = plt.subplots(3, 1, figsize=(13, 15))
     fig.suptitle(
-        f"Investor Portfolio  ({WEIGHT_GARP:.0%} GARP  ·  {WEIGHT_XAT:.0%} XAT  ·  {WEIGHT_SIS:.0%} SIS)\n"
-        "TMT quality-momentum  +  cross-asset trend (SPY·TLT·GLD)  +  intraday short",
+        f"Investor Portfolio  ({WEIGHT_GARP:.0%} GARP Momentum  ·  {WEIGHT_XAT:.0%} Cross-Asset Trend)\n"
+        "TMT quality-momentum  +  cross-asset rotation (SPY · TLT · GLD)",
         fontsize=11, fontweight="bold",
     )
 
@@ -240,16 +213,13 @@ def main():
     ax = axes[1]
     g = garp_val - cap_garp
     x = xat_val  - cap_xat
-    s = sis_val  - cap_sis
-    ax.fill_between(g.index, 0,   g,         color="#2c7bb6", alpha=0.75,
+    ax.fill_between(g.index, 0, g,     color="#2c7bb6", alpha=0.75,
                     label=f"GARP {WEIGHT_GARP:.0%} (TMT individual stocks)")
-    ax.fill_between(x.index, g,   g + x,     color="#e9c46a", alpha=0.75,
+    ax.fill_between(x.index, g, g + x, color="#e9c46a", alpha=0.75,
                     label=f"XAT {WEIGHT_XAT:.0%} (SPY · TLT · GLD)")
-    ax.fill_between(s.index, g+x, g + x + s, color="seagreen", alpha=0.75,
-                    label=f"SIS {WEIGHT_SIS:.0%} (intraday short)")
     ax.axhline(0, color="black", linewidth=0.5)
     ax.set_ylabel("Cumulative P&L ($)")
-    ax.set_title("Stacked P&L — three return sources")
+    ax.set_title("Stacked P&L by sleeve")
     ax.legend(fontsize=8)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 

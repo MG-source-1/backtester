@@ -3,14 +3,7 @@ GARP Momentum — strategy parameters.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from config import END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
-
-# GARP runs from 2016 — earlier than the combined portfolio's 2020 start.
-# EDGAR fundamental data goes back to ~2009 for most large-cap TMT names,
-# and Alpaca daily prices go back to ~2016. SIS (the binding constraint for
-# the combined portfolio) needs 5-minute intraday bars which only exist from
-# 2020, but GARP only needs daily prices so it can run the longer window.
-START_DATE = "2016-01-01"
+from config import START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
 
 # ── Universe: large-cap TMT / growth stocks ───────────────────
 TICKERS = [

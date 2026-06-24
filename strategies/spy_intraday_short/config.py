@@ -4,7 +4,10 @@ Shared params (dates, capital, paths) come from the root config.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from config import START_DATE, END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
+from config import END_DATE, INITIAL_CAPITAL, OUTPUT_DIR, DATA_CACHE_DIR  # noqa: F401
+
+# Alpaca 5-minute intraday bars are only available from 2020 onwards.
+START_DATE = "2020-01-01"
 
 SYMBOL            = "SPY"
 MIN_MORNING_MOVE  = 0.0020   # |09:30-10:00 ret| ≥ this to qualify
