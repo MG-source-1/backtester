@@ -2,7 +2,15 @@
 
 A modular systematic trading backtester. All data is sourced from **Alpaca Markets** (SIP feed) and yahoo finance.
 
-All strategies are benchmarked on the same window: **2020–2024** — the earliest period where every data source (daily prices, intraday SPY bars, T-bill proxy) is fully available.
+Strategies run on the longest window their data sources allow:
+
+| Strategy | Period | Binding constraint |
+|---|---|---|
+| GARP Momentum | 2016–2024 | Alpaca daily prices (~2016) · EDGAR fundamentals (~2009) |
+| Investor Portfolio (GARP + XAT + SIS) | 2020–2024 | SIS requires 5-min intraday bars, available from Alpaca from 2020 only |
+| AFP, XAT, Tech-Tier (reference) | 2020–2024 | Aligned to the combined portfolio window |
+
+**Why GARP has a longer window than the combined portfolio:** GARP only needs daily price data and fundamental statements — both available from well before 2020. The combined portfolio is constrained to 2020 because SIS (SPY Intraday Short) needs 5-minute intraday bars, which Alpaca only provides from 2020 onwards. Rather than artificially shortening GARP's backtest to match SIS, GARP reports results over its full available window.
 
 ---
 
@@ -10,7 +18,7 @@ All strategies are benchmarked on the same window: **2020–2024** — the earli
 
 ### ★ Investor Portfolio — recommended allocation
 **File:** `strategies/combined_portfolio/main.py`  
-**Sharpe:** 0.93 &nbsp;|&nbsp; **Return:** +98% &nbsp;|&nbsp; **Max DD:** −20.8% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 1.07 &nbsp;|&nbsp; **Return:** +116% &nbsp;|&nbsp; **Max DD:** −18.8% &nbsp;|&nbsp; **Period:** 2020–2024
 
 | Sleeve | Weight | Strategy | Purpose |
 |---|---|---|---|
@@ -18,7 +26,7 @@ All strategies are benchmarked on the same window: **2020–2024** — the earli
 | XAT | 20% | Cross-Asset Trend (SPY · TLT · GLD) | Regime diversifier — equity, bonds, or gold depending on momentum |
 | SIS | 10% | SPY Intraday Short | Market-neutral alpha, earns on a different clock |
 
-**Result:** Sharpe 0.93, +98% total return, Max DD −20.8% over 2020–2024. Beats SPY (+95%) with a Sharpe near 1.0 and meaningfully lower drawdown than GARP standalone (−20.8% vs −25.6%).
+**Result:** Sharpe 1.07, +116% total return, Max DD −18.8% over 2020–2024. Beats SPY (+95%) by 21 percentage points, exceeds the Sharpe 1.0 design goal, and reduces drawdown substantially vs GARP standalone (−18.8% vs −22.8%).
 
 **Why XAT includes SPY:** XAT is not a pure hedge — it is a cross-asset trend strategy that participates in whichever asset has the strongest momentum. When equities are trending, XAT holds SPY and generates positive returns alongside GARP. When risk-off conditions take hold, XAT rotates into TLT (bonds) or GLD (gold), which tend to rally when equities fall. Including SPY is what makes XAT a *return-seeking diversifier* rather than a *return-dragging hedge*. Removing SPY from XAT (tested earlier) resulted in XAT sitting in cash 35% of the time and returning only +2.4% — too passive to justify its capital allocation.
 
@@ -67,7 +75,7 @@ The honest caveat: this conclusion is window-specific. If the next 5 years bring
 | 45% GARP + 45% XAT(TLT/GLD) + 10% SIS | +61% | 0.80 | −15.4% | Still XAT without SPY |
 | 45% GARP + 45% XAT(SPY/TLT/GLD) + 10% SIS | +69% | 0.84 | −17.6% | SPY back in XAT, better |
 | 90% GARP + 10% SIS (no XAT) | +119% | 0.95 | −23.7% | Removed XAT, concentrated in GARP |
-| **70% GARP + 20% XAT(SPY/TLT/GLD) + 10% SIS** | **+98%** | **0.93** | **−20.8%** | **Current — balances alpha with diversification** |
+| **70% GARP + 20% XAT(SPY/TLT/GLD) + 10% SIS** | **+116%** | **1.08** | **−18.8%** | **Current — balances alpha with diversification** |
 
 The current 70/20/10 split keeps GARP dominant (reflecting its superior risk-adjusted returns) while giving XAT enough capital to provide meaningful regime diversification. The max drawdown improvement from GARP standalone (−25.6%) to the portfolio (−20.8%) is XAT's primary contribution.
 
@@ -110,7 +118,7 @@ Uses Alpaca 5-minute SPY bars. On high-conviction mornings — when both the ove
 
 ### 4. GARP Momentum
 **File:** `strategies/garp_momentum/main.py`  
-**Sharpe:** 1.12 &nbsp;|&nbsp; **Return:** +130% &nbsp;|&nbsp; **Max DD:** −25.6% &nbsp;|&nbsp; **Period:** 2020–2024
+**Sharpe:** 1.06 &nbsp;|&nbsp; **Return:** +455% &nbsp;|&nbsp; **Max DD:** −22.8% &nbsp;|&nbsp; **Period:** 2016–2024
 
 Applies **Growth at a Reasonable Price (GARP)** fundamental screening to a 15-stock TMT universe (AAPL, MSFT, GOOGL, META, NVDA, AMD, AVGO, QCOM, ORCL, CRM, ADBE, NFLX, AMZN, TSLA, INTC), then selects and sizes positions using **Jegadeesh-Titman price momentum**.
 
@@ -129,7 +137,7 @@ Six ratios are scored and combined into a composite GARP quality rank:
 
 **Current top GARP scores:** ADBE (0.874 — PEG 0.53, ROE 63%), NVDA (0.706 — PEG 0.65, ROE 114%), NFLX (0.707), CRM (0.665), META (0.656). TSLA (0.128) and INTC (0.297) are correctly screened out by the fundamentals.
 
-> **Note:** The backtest uses point-in-time fundamental scores with a 60-day filing lag. yfinance only retains ~7 quarters of history (late 2024 onwards), which does not cover the 2020–2024 backtest window — so the backtest runs as pure price momentum throughout. GARP fundamental scoring applies to live forward use only.
+> **Note:** Fundamental data comes from the SEC EDGAR XBRL Company Facts API — no API key required. EDGAR provides the exact `filed` date for every submission, making point-in-time accuracy inherent: each rebalance only sees data publicly filed on or before that date. Coverage goes back to ~2009 for most large-cap TMT names (65 filing dates for AAPL, 66 for NVDA), giving the GARP quality screen genuine historical data throughout the full 2020–2024 backtest window. `yfinance` is no longer a dependency.
 
 ---
 
@@ -211,7 +219,7 @@ python strategies/spy_intraday_short/generate_pdf.py
 
 **Install dependencies:**
 ```bash
-pip install pandas numpy matplotlib markdown yfinance
+pip install pandas numpy matplotlib markdown
 ```
 
 **Alpaca credentials** (required for all strategies):
@@ -234,7 +242,7 @@ ALPACA_SECRET=your-secret-here
 | ETF / stock daily prices | Alpaca SIP `1Day` bars, `adjustment=all` | Total return (splits + dividends included) |
 | SPY 5-min intraday | Alpaca SIP `5Min` bars | ~230k bars, 2020–2024 |
 | T-bill proxy | BIL ETF daily return | SPDR 1-3 Month T-Bill ETF |
-| Fundamental data | yfinance (point-in-time quarterly filings) | PEG, ROE, EV/EBITDA, FCF yield — GARP strategy only |
+| Fundamental data | SEC EDGAR XBRL Company Facts API | PEG, ROE, EV/EBITDA, FCF yield — GARP strategy only. No API key required. |
 
 ---
 

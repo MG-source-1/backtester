@@ -256,6 +256,29 @@ def run_garp_backtest(
     rebal_set = set(rebal_dates)
     records   = []
 
+    # ── Warmup period: hold cash, earn T-bill ─────────────────
+    # Included so the portfolio covers the full configured date range,
+    # making Trading Days and SPY comparison consistent across strategies.
+    for date in prices.index:
+        if date >= start_day:
+            break
+        tbill_today = tbill.get(date, 0.0)
+        net_pnl     = tbill_today * portfolio_value
+        portfolio_value += net_pnl
+        peak_value = max(peak_value, portfolio_value)
+        records.append({
+            "date":             date,
+            "net_pnl":          net_pnl,
+            "transaction_cost": 0.0,
+            "portfolio_value":  portfolio_value,
+            "invested_weight":  0.0,
+            "cash_weight":      1.0,
+            "regime_scale":     1.0,
+            "stop_active":      False,
+            "n_held":           0,
+            "holdings":         "",
+        })
+
     for date in prices.index:
         if date < start_day:
             continue

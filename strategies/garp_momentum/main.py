@@ -121,7 +121,7 @@ def main():
     garp_history = build_garp_history(available, prices, cache_dir=DATA_CACHE_DIR)
 
     print("[fundamentals] Fetching current GARP scores for display …")
-    garp_df = fetch_garp_scores(available)
+    garp_df = fetch_garp_scores(available, prices=prices, cache_dir=DATA_CACHE_DIR)
 
     # ── Print GARP table ──────────────────────────────────────
     sorted_garp = garp_df.sort_values("garp_score", ascending=False)
